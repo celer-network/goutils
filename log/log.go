@@ -307,9 +307,7 @@ func SetLevel(level Level) {
 
 func SetLevelByName(name string) {
 	level, valid := getLevelByName(name)
-	if valid {
-		levelSetByFlag = true
-	} else {
+	if !valid {
 		os.Stderr.Write([]byte("Error: invalid log level flag, use default InfoLevel\n"))
 	}
 	SetLevel(level)
@@ -494,7 +492,13 @@ var levelSetByFlag = false
 
 // Set is part of the flag.Value interface.
 func (l *Level) Set(value string) error {
-	SetLevelByName(value)
+	level, valid := getLevelByName(value)
+	if valid {
+		levelSetByFlag = true
+	} else {
+		os.Stderr.Write([]byte("Error: invalid log level flag, use default InfoLevel\n"))
+	}
+	SetLevel(level)
 	return nil
 }
 
