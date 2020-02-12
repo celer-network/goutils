@@ -20,5 +20,7 @@ jobs:
       run: |
         go get -v -t -d ./...
 
-    - name: Test
-      run: go test -v .
+    - name: Build
+      run: |
+        go build github.com/celer-network/goutils/log
+        go build github.com/celer-network/goutils/jsonpbhex
