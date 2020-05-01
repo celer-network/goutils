@@ -260,3 +260,18 @@ func ChkExec(res sql.Result, err error, want int64, info string) error {
 	}
 	return err
 }
+
+// Return the IN-clause of a SQL query based on the column name, the number
+// of its values and their starting position, e.g. "status IN ($3, $4, $5)"
+func InClause(column string, num, start int) string {
+	if column == "" || num < 1 || start < 1 {
+		return ""
+	}
+
+	params := make([]string, num)
+	for i := 0; i < num; i++ {
+		params[i] = fmt.Sprintf("$%d", start+i)
+	}
+
+	return fmt.Sprintf("%s IN (%s)", column, strings.Join(params, ", "))
+}
