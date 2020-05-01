@@ -8,6 +8,7 @@
 package sqldb
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
 	"os"
@@ -165,6 +166,24 @@ func updateCount(s SqlStorage, name string, count int) error {
 	return ChkExec(res, err, 1, "updateCount")
 }
 
+func rowsToMap(rows *sql.Rows) (map[string]int, error) {
+	names := make(map[string]int)
+
+	if rows != nil {
+		var name string
+		var count int
+		for rows.Next() {
+			err := rows.Scan(&name, &count)
+			if err != nil {
+				return nil, err
+			}
+			names[name] = count
+		}
+	}
+
+	return names, nil
+}
+
 func getAllNames(s SqlStorage) (map[string]int, error) {
 	q := "SELECT name, count FROM foo"
 	rows, err := s.Query(q)
@@ -173,18 +192,27 @@ func getAllNames(s SqlStorage) (map[string]int, error) {
 	}
 	defer rows.Close()
 
-	names := make(map[string]int)
-	var name string
-	var count int
-	for rows.Next() {
-		err = rows.Scan(&name, &count)
-		if err != nil {
-			return nil, err
-		}
-		names[name] = count
+	return rowsToMap(rows)
+}
+
+func getSomeNames(s SqlStorage, names []string) (map[string]int, error) {
+	if len(names) == 0 {
+		return rowsToMap(nil)
 	}
 
-	return names, nil
+	var args []interface{}
+	for _, name := range names {
+		args = append(args, name)
+	}
+
+	q := "SELECT name, count FROM foo WHERE " + InClause("name", len(args), 1)
+	rows, err := s.Query(q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return rowsToMap(rows)
 }
 
 func expectAllNames(t *testing.T, s SqlStorage, exp map[string]int) {
@@ -193,6 +221,18 @@ func expectAllNames(t *testing.T, s SqlStorage, exp map[string]int) {
 		t.Errorf("getAllNames error: %v", err)
 	} else if !reflect.DeepEqual(names, exp) {
 		t.Errorf("getAllNames wrong: %v != %v", names, exp)
+	}
+
+	var some []string
+	for name := range exp {
+		some = append(some, name)
+	}
+
+	names, err = getSomeNames(s, some)
+	if err != nil {
+		t.Errorf("getSomeNames error: %v", err)
+	} else if !reflect.DeepEqual(names, exp) {
+		t.Errorf("getSomeNames wrong: %v != %v", names, exp)
 	}
 }
 
