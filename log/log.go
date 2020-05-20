@@ -90,6 +90,10 @@ var levelInfo = []levelmeta{
 
 type arrayFlags []string
 
+type Output interface {
+	OnLog(output string)
+}
+
 // Logger obejct
 type Logger struct {
 	file       *os.File     // log file writer
@@ -106,6 +110,7 @@ type Logger struct {
 	localtime  bool         // use local time
 	longfile   bool         // show long file path
 	pathsplit  string       // file path splitter
+	out        Output       // output to a callback function
 	rw         sync.RWMutex // protect config values
 }
 
@@ -232,6 +237,8 @@ func (l *Logger) output(msg string, level Level) {
 			}
 		}
 		l.file.Write(buf.Bytes())
+	} else if l.out != nil {
+		l.out.OnLog(buf.String())
 	} else {
 		os.Stderr.Write(buf.Bytes())
 	}
@@ -327,6 +334,12 @@ func SetFileName(name string) {
 	std.rw.Lock()
 	defer std.rw.Unlock()
 	std.name = name
+}
+
+func SetOutput(out Output) {
+	std.rw.Lock()
+	defer std.rw.Unlock()
+	std.out = out
 }
 
 func SetPrefix(prefix string) {
