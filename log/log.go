@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Celer Network
+// Copyright 2018-2020 Celer Network
 
 // API:
 // Trace[f|ln], Debug[f|ln], Info[f|ln], Warn[f|ln], Error[f|ln], Fatal[f|ln], Panic[f|ln],

@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Celer Network
+// Copyright 2018-2020 Celer Network
 
 // Try run with different flags. Example:
 // go run logtest.go -logcolor -loglevel=debug
