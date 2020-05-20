@@ -17,8 +17,9 @@ import (
 type TestOutput struct {
 }
 
-func (cb TestOutput) OnLog(output string) {
+func (cb TestOutput) Write(output []byte) (n int, err error) {
 	fmt.Printf("receive log output: %s", output)
+	return len(output), nil
 }
 
 var testoutput = flag.Bool("testoutput", false, "test log output callback")
