@@ -1,4 +1,4 @@
-// Copyright 2018-2019 Celer Network
+// Copyright 2018-2020 Celer Network
 
 // API:
 // Trace[f|ln], Debug[f|ln], Info[f|ln], Warn[f|ln], Error[f|ln], Fatal[f|ln], Panic[f|ln],
@@ -90,12 +90,19 @@ var levelInfo = []levelmeta{
 
 type arrayFlags []string
 
+type Output interface {
+	// Write writes len(b) bytes to the File.
+	// It returns the number of bytes written and an error, if any.
+	Write(output []byte) (n int, err error)
+}
+
 // Logger obejct
 type Logger struct {
+	out        Output       // log default writer
 	file       *os.File     // log file writer
 	filetime   time.Time    // file created time
 	mu         sync.Mutex   // protect log writer
-	dir        string       // write log into directory instead of stderr
+	dir        string       // write log into files in the directory instead of the default writer
 	name       string       // log file name
 	prefix     string       // log entry prefix
 	level      Level        // log level
@@ -129,6 +136,7 @@ func init() {
 	bufferPool = &sync.Pool{New: func() interface{} { return new(bytes.Buffer) }}
 	std.level = InfoLevel
 	std.filetime = time.Time{}
+	std.out = os.Stderr
 }
 
 var onceLogFile sync.Once
@@ -215,30 +223,30 @@ func (l *Logger) output(msg string, level Level) {
 		onceLogFile.Do(func() { // create folder and first log file
 			err := os.MkdirAll(l.dir, 0755)
 			if err != nil {
-				os.Stderr.Write(buf.Bytes())
+				l.out.Write(buf.Bytes())
 				l.exit(err)
 			}
 			err = l.createFile(t)
 			if err != nil {
-				os.Stderr.Write(buf.Bytes())
+				l.out.Write(buf.Bytes())
 				l.exit(err)
 			}
 		})
 		if l.rotate && t.Day() != l.filetime.Day() {
 			err := l.rotateFile(t)
 			if err != nil {
-				os.Stderr.Write(buf.Bytes())
+				l.out.Write(buf.Bytes())
 				l.exit(err)
 			}
 		}
 		l.file.Write(buf.Bytes())
 	} else {
-		os.Stderr.Write(buf.Bytes())
+		l.out.Write(buf.Bytes())
 	}
 }
 
 func (l *Logger) exit(err error) {
-	fmt.Fprintf(os.Stderr, "FATAL: log exiting because of error: %w\n", err)
+	fmt.Fprintf(l.out, "FATAL: log exiting because of error: %w\n", err)
 	os.Exit(2)
 }
 
@@ -282,7 +290,7 @@ func (l *Logger) createFile(t time.Time) error {
 	l.file, err = os.Create(fname)
 	if err == nil {
 		logpath, _ := filepath.Abs(fname)
-		os.Stderr.Write([]byte("Log to " + logpath + "\n"))
+		l.out.Write([]byte("Log to " + logpath + "\n"))
 		l.filetime = t
 		return nil
 	}
@@ -308,7 +316,7 @@ func SetLevel(level Level) {
 func SetLevelByName(name string) {
 	level, valid := getLevelByName(name)
 	if !valid {
-		os.Stderr.Write([]byte("Error: invalid log level flag, use default InfoLevel\n"))
+		std.out.Write([]byte("Error: invalid log level flag, use default InfoLevel\n"))
 	}
 	SetLevel(level)
 }
@@ -327,6 +335,12 @@ func SetFileName(name string) {
 	std.rw.Lock()
 	defer std.rw.Unlock()
 	std.name = name
+}
+
+func SetOutput(out Output) {
+	std.rw.Lock()
+	defer std.rw.Unlock()
+	std.out = out
 }
 
 func SetPrefix(prefix string) {
@@ -496,7 +510,7 @@ func (l *Level) Set(value string) error {
 	if valid {
 		levelSetByFlag = true
 	} else {
-		os.Stderr.Write([]byte("Error: invalid log level flag, use default InfoLevel\n"))
+		std.out.Write([]byte("Error: invalid log level flag, use default InfoLevel\n"))
 	}
 	SetLevel(level)
 	return nil
