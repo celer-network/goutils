@@ -38,6 +38,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -90,15 +91,9 @@ var levelInfo = []levelmeta{
 
 type arrayFlags []string
 
-type Output interface {
-	// Write writes len(b) bytes to the File.
-	// It returns the number of bytes written and an error, if any.
-	Write(output []byte) (n int, err error)
-}
-
 // Logger obejct
 type Logger struct {
-	out        Output       // log default writer
+	out        io.Writer    // log default writer
 	file       *os.File     // log file writer
 	filetime   time.Time    // file created time
 	mu         sync.Mutex   // protect log writer
@@ -337,10 +332,10 @@ func SetFileName(name string) {
 	std.name = name
 }
 
-func SetOutput(out Output) {
+func SetOutput(w io.Writer) {
 	std.rw.Lock()
 	defer std.rw.Unlock()
-	std.out = out
+	std.out = w
 }
 
 func SetPrefix(prefix string) {
