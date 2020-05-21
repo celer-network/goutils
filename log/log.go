@@ -137,6 +137,8 @@ func init() {
 var onceLogFile sync.Once
 
 func (l *Logger) output(msg string, level Level) {
+	l.rw.RLock()
+	defer l.rw.RUnlock()
 	// data and time
 	var t time.Time
 	if l.localtime {
