@@ -316,7 +316,7 @@ func SetLevelByName(name string) {
 	level, valid := getLevelByName(name)
 	if !valid {
 		std.mu.Lock()
-		std.out.Write([]byte("Error: invalid log level flag, use default InfoLevel\n"))
+		std.out.Write([]byte("Warn: invalid log level name, use default InfoLevel\n"))
 		std.mu.Unlock()
 	}
 	SetLevel(level)
