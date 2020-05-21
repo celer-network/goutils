@@ -137,6 +137,8 @@ func init() {
 var onceLogFile sync.Once
 
 func (l *Logger) output(msg string, level Level) {
+	l.rw.RLock()
+	defer l.rw.RUnlock()
 	// data and time
 	var t time.Time
 	if l.localtime {
@@ -285,7 +287,9 @@ func (l *Logger) createFile(t time.Time) error {
 	l.file, err = os.Create(fname)
 	if err == nil {
 		logpath, _ := filepath.Abs(fname)
+		l.mu.Lock()
 		l.out.Write([]byte("Log to " + logpath + "\n"))
+		l.mu.Unlock()
 		l.filetime = t
 		return nil
 	}
@@ -311,7 +315,9 @@ func SetLevel(level Level) {
 func SetLevelByName(name string) {
 	level, valid := getLevelByName(name)
 	if !valid {
-		std.out.Write([]byte("Error: invalid log level flag, use default InfoLevel\n"))
+		std.mu.Lock()
+		std.out.Write([]byte("Warn: invalid log level name, use default InfoLevel\n"))
+		std.mu.Unlock()
 	}
 	SetLevel(level)
 }
@@ -333,8 +339,8 @@ func SetFileName(name string) {
 }
 
 func SetOutput(w io.Writer) {
-	std.rw.Lock()
-	defer std.rw.Unlock()
+	std.mu.Lock()
+	defer std.mu.Unlock()
 	std.out = w
 }
 
@@ -505,7 +511,9 @@ func (l *Level) Set(value string) error {
 	if valid {
 		levelSetByFlag = true
 	} else {
+		std.mu.Lock()
 		std.out.Write([]byte("Error: invalid log level flag, use default InfoLevel\n"))
+		std.mu.Unlock()
 	}
 	SetLevel(level)
 	return nil
