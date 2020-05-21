@@ -14,20 +14,20 @@ import (
 	"github.com/celer-network/goutils/log"
 )
 
+var testoutput = flag.Bool("testoutput", false, "test log output callback")
+
 type TestOutput struct {
 }
 
-func (cb TestOutput) Write(output []byte) (n int, err error) {
+func (cb *TestOutput) Write(output []byte) (n int, err error) {
 	fmt.Printf("receive log output: %s", output)
 	return len(output), nil
 }
 
-var testoutput = flag.Bool("testoutput", false, "test log output callback")
-
 func main() {
 	flag.Parse()
 	if *testoutput {
-		log.SetOutput(TestOutput{})
+		log.SetOutput(&TestOutput{})
 	}
 	log.Trace("trace every step")
 	log.Debug("looking into what's really happening")

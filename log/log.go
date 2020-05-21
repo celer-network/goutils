@@ -333,8 +333,8 @@ func SetFileName(name string) {
 }
 
 func SetOutput(w io.Writer) {
-	std.rw.Lock()
-	defer std.rw.Unlock()
+	std.mu.Lock()
+	defer std.mu.Unlock()
 	std.out = w
 }
 
