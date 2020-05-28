@@ -261,6 +261,21 @@ func ChkExec(res sql.Result, err error, want int64, info string) error {
 	return err
 }
 
+// Similar to ChkExec() but returns the given "diff error" when the number
+// of rows affected is different from the desired number.  This allows the
+// caller to distinguish between the error cases.
+func ChkExecDiffError(res sql.Result, err, diffErr error, want int64) error {
+	if err != nil {
+		return err
+	}
+
+	got, err := res.RowsAffected()
+	if err == nil && got != want {
+		err = diffErr
+	}
+	return err
+}
+
 // Return the IN-clause of a SQL query based on the column name, the number
 // of its values and their starting position, e.g. "status IN ($3, $4, $5)"
 func InClause(column string, num, start int) string {
