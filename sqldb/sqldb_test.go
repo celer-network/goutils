@@ -9,6 +9,7 @@ package sqldb
 
 import (
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -27,6 +28,10 @@ const (
 	dbWebSvr = "localhost:5566"
 	dbInfoPG = "postgresql://celer@" + dbSvr + "/celertest?sslmode=disable"
 	dbDirPG  = "/tmp/sqldb_test"
+)
+
+var (
+	ErrDelNotFound = errors.New("delete did not find the row")
 )
 
 // TestMain is used to setup/teardown a temporary CockroachDB instance
@@ -149,7 +154,7 @@ func insertName(s SqlStorage, name string, count int) error {
 func deleteName(s SqlStorage, name string) error {
 	q := "DELETE FROM foo WHERE name = $1"
 	res, err := s.Exec(q, name)
-	return ChkExec(res, err, 1, "deleteName")
+	return ChkExecDiffError(res, err, ErrDelNotFound, 1)
 }
 
 func getCount(s SqlStorage, name string) (int, bool, error) {
@@ -286,6 +291,20 @@ func testSimpleOps(t *testing.T, db *Db) {
 
 	delete(expNames, name)
 	expectAllNames(t, db, expNames)
+
+	// Delete non-existing row should return the specific default error.
+	err = deleteName(db, name)
+	if err != ErrDelNotFound {
+		t.Errorf("deleteName non-row wrong error: %v != %v", err, ErrDelNotFound)
+	}
+
+	// Update non-existing row should fail with a wrapped ErrNoRows error.
+	err = updateCount(db, name, 1234567)
+	if err == nil {
+		t.Errorf("updateCount non-row did not fail")
+	} else if !errors.Is(err, ErrNoRows) {
+		t.Errorf("updateCount non-row wrong error, not wrap of ErrNoRows: %v", err)
+	}
 }
 
 func TestSimpleOps_crdb(t *testing.T) {
@@ -425,9 +444,9 @@ func testTransactionOverlap(t *testing.T, db *Db) {
 	ch2to1 := make(chan int)
 
 	go func() {
-		tx2, err := db.OpenTransaction()
-		if err != nil {
-			t.Errorf("cannot start 2nd Tx: %v", err)
+		tx2, err2 := db.OpenTransaction()
+		if err2 != nil {
+			t.Errorf("cannot start 2nd Tx: %v", err2)
 		}
 
 		err = txUpdateFunc(tx2, 30, 70)
