@@ -287,9 +287,7 @@ func (l *Logger) createFile(t time.Time) error {
 	l.file, err = os.Create(fname)
 	if err == nil {
 		logpath, _ := filepath.Abs(fname)
-		l.mu.Lock()
 		l.out.Write([]byte("Log to " + logpath + "\n"))
-		l.mu.Unlock()
 		l.filetime = t
 		return nil
 	}
