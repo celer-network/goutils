@@ -32,6 +32,14 @@ func NewSigner(privateKey string, chainId *big.Int) (*Signer, error) {
 	return c, nil
 }
 
+func NewSignerFromKeystore(keyStore, passPhrase string, chainId *big.Int) (*Signer, error) {
+	_, privkey, err := GetAddrPrivKeyFromKeyStore(keyStore, passPhrase)
+	if err != nil {
+		return nil, err
+	}
+	return NewSigner(privkey, chainId)
+}
+
 // input data: a byte array of raw message to be signed
 // return a byte array signature in the R,S,V format
 func (s *Signer) SignEthMessage(data []byte) ([]byte, error) {
@@ -89,7 +97,7 @@ func GeneratePrefixedHash(data []byte) []byte {
 	return crypto.Keccak256([]byte("\x19Ethereum Signed Message:\n32"), crypto.Keccak256(data))
 }
 
-func GetAddrAndPrivKey(keyStore string, passPhrase string) (common.Address, string, error) {
+func GetAddrPrivKeyFromKeyStore(keyStore, passPhrase string) (common.Address, string, error) {
 	key, err := keystore.DecryptKey([]byte(keyStore), passPhrase)
 	if err != nil {
 		return common.Address{}, "", err
