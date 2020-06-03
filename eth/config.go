@@ -63,7 +63,9 @@ func SetQuickCatchBlockDelay(quickCatchBlockDelay uint64) {
 func SetBlockPollingInterval(pollingIntervalSec uint64) {
 	confLock.Lock()
 	defer confLock.Unlock()
-	conf.blockPollingIntervalSec = pollingIntervalSec
+	if pollingIntervalSec != 0 {
+		conf.blockPollingIntervalSec = pollingIntervalSec
+	}
 }
 
 func SetChainId(chainId *big.Int) {
