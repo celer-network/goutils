@@ -9,19 +9,20 @@ import (
 )
 
 type config struct {
-	txTimeout, txQueryTimeout, txQueryRetryInterval    time.Duration // used by waitmined
-	minGasGwei, maxGasGwei                             uint64        // used by transactor
-	blockDelay, quickCatchBlockDelay, blockIntervalSec uint64        // used by transactor
-	chainId                                            *big.Int      // used by signer
+	txTimeout, txQueryTimeout, txQueryRetryInterval time.Duration // used by waitmined
+	minGasGwei, maxGasGwei                          uint64        // used by transactor
+	blockDelay, quickCatchBlockDelay                uint64        // used by transactor
+	blockPollingIntervalSec                         uint64        // used by transactor
+	chainId                                         *big.Int      // used by signer
 }
 
 var conf = &config{
-	txTimeout:            6 * time.Hour,
-	txQueryTimeout:       2 * time.Minute,
-	txQueryRetryInterval: 10 * time.Second,
-	blockDelay:           5,
-	quickCatchBlockDelay: 2,
-	blockIntervalSec:     15,
+	txTimeout:               6 * time.Hour,
+	txQueryTimeout:          2 * time.Minute,
+	txQueryRetryInterval:    10 * time.Second,
+	blockDelay:              5,
+	quickCatchBlockDelay:    2,
+	blockPollingIntervalSec: 15,
 }
 
 var confLock sync.RWMutex
@@ -59,10 +60,10 @@ func SetQuickCatchBlockDelay(quickCatchBlockDelay uint64) {
 	conf.quickCatchBlockDelay = quickCatchBlockDelay
 }
 
-func SetBlockIntervalSec(blockIntervalSec uint64) {
+func SetBlockPollingInterval(pollingIntervalSec uint64) {
 	confLock.Lock()
 	defer confLock.Unlock()
-	conf.blockIntervalSec = blockIntervalSec
+	conf.blockPollingIntervalSec = pollingIntervalSec
 }
 
 func SetChainId(chainId *big.Int) {
@@ -113,10 +114,10 @@ func getQuickCatchBlockDelay() uint64 {
 	return conf.quickCatchBlockDelay
 }
 
-func getBlockIntervalSec() uint64 {
+func getBlockPollingIntervalSec() uint64 {
 	confLock.RLock()
 	defer confLock.RUnlock()
-	return conf.blockIntervalSec
+	return conf.blockPollingIntervalSec
 }
 
 func getChainId() *big.Int {

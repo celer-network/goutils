@@ -169,7 +169,7 @@ func (t *Transactor) transact(
 					if txconfig.QuickCatch && quickCatchBlockDelay < blockDelay {
 						blockDelay = quickCatchBlockDelay
 					}
-					receipt, err := WaitMined(context.Background(), client, tx, blockDelay, getBlockIntervalSec())
+					receipt, err := WaitMined(context.Background(), client, tx, blockDelay, getBlockPollingIntervalSec())
 					if err != nil {
 						log.Error(err)
 						if errors.Is(err, ErrTxDropped) && handler.OnDropped != nil {
@@ -200,7 +200,7 @@ func (t *Transactor) Address() common.Address {
 }
 
 func (t *Transactor) WaitMined(txHash string) (*types.Receipt, error) {
-	return WaitMinedWithTxHash(context.Background(), t.client, txHash, getBlockDelay(), getBlockIntervalSec())
+	return WaitMinedWithTxHash(context.Background(), t.client, txHash, getBlockDelay(), getBlockPollingIntervalSec())
 }
 
 func (t *Transactor) newTransactOpts() *bind.TransactOpts {
