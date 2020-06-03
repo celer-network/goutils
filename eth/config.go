@@ -25,6 +25,9 @@ var conf = &config{
 	blockPollingIntervalSec: 15,
 }
 
+// Currently use package level singleton config for simplicity.
+// This is could be a bit risky as multiple libs may override config against each other.
+// TODO: enable per-object and per-method config
 var confLock sync.RWMutex
 
 func SetWaitMinedConfig(txTimeoutSec, txQueryTimeoutSec, txQueryRetryIntervalSec uint64) {
