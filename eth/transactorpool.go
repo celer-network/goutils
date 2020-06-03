@@ -19,12 +19,12 @@ type TransactorPool struct {
 }
 
 type TransactorConfig struct {
-	KeyStore   string
-	PassPhrase string
+	Keyjson    string
+	Passphrase string
 }
 
-func NewTransactorConfig(keystore string, passphrase string) *TransactorConfig {
-	return &TransactorConfig{KeyStore: keystore, PassPhrase: passphrase}
+func NewTransactorConfig(keyjson string, passphrase string) *TransactorConfig {
+	return &TransactorConfig{Keyjson: keyjson, Passphrase: passphrase}
 }
 
 func NewTransactorPool(transactors []*Transactor) (*TransactorPool, error) {
@@ -39,7 +39,7 @@ func NewTransactorPoolFromConfig(
 	configs []*TransactorConfig) (*TransactorPool, error) {
 	transactors := []*Transactor{}
 	for _, config := range configs {
-		transactor, err := NewTransactor(config.KeyStore, config.PassPhrase, client)
+		transactor, err := NewTransactor(config.Keyjson, config.Passphrase, client)
 		if err != nil {
 			log.Errorln(err)
 		} else {

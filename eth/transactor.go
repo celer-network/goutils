@@ -48,10 +48,10 @@ type TransactionStateHandler struct {
 }
 
 func NewTransactor(
-	keyStore string,
-	passPhrase string,
+	keyjson string,
+	passphrase string,
 	client *ethclient.Client) (*Transactor, error) {
-	address, privKey, err := GetAddrPrivKeyFromKeystore(keyStore, passPhrase)
+	address, privKey, err := GetAddrPrivKeyFromKeystore(keyjson, passphrase)
 	if err != nil {
 		return nil, err
 	}

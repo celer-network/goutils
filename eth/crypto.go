@@ -40,8 +40,8 @@ func NewSigner(privateKey string) (*CelerSigner, error) {
 	return c, nil
 }
 
-func NewSignerFromKeystore(keyStore, passPhrase string) (*CelerSigner, error) {
-	_, privkey, err := GetAddrPrivKeyFromKeystore(keyStore, passPhrase)
+func NewSignerFromKeystore(keyjson, passphrase string) (*CelerSigner, error) {
+	_, privkey, err := GetAddrPrivKeyFromKeystore(keyjson, passphrase)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +105,8 @@ func GeneratePrefixedHash(data []byte) []byte {
 	return crypto.Keccak256([]byte("\x19Ethereum Signed Message:\n32"), crypto.Keccak256(data))
 }
 
-func GetAddrPrivKeyFromKeystore(keyStore, passPhrase string) (common.Address, string, error) {
-	key, err := keystore.DecryptKey([]byte(keyStore), passPhrase)
+func GetAddrPrivKeyFromKeystore(keyjson, passphrase string) (common.Address, string, error) {
+	key, err := keystore.DecryptKey([]byte(keyjson), passphrase)
 	if err != nil {
 		return common.Address{}, "", err
 	}
