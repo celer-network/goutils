@@ -106,7 +106,6 @@ func (mr *mockReader) Close() error {
 
 func (mr *mockReader) CommitMessages(ctx context.Context, msgs ...kafka.Message) error {
 	if mr.nocommit {
-		fmt.Println("commit failed")
 		return ErrReaderCommit
 	}
 
