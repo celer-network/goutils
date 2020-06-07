@@ -1,3 +1,5 @@
+// Copyright 2018-2020 Celer Network
+
 package watcher
 
 import (

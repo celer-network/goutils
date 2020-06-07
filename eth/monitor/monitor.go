@@ -330,7 +330,7 @@ func (s *Service) monitorEvent(e Event, id CallbackID) {
 		}
 
 		// Stop watching if the event was removed
-		// TODO(mzhou): Also stop monitoring if timeout has passed
+		// TODO: Also stop monitoring if timeout has passed
 		if s.isEventRemoved(id) {
 			e.watch.Close()
 			return
