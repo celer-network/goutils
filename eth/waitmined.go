@@ -88,9 +88,9 @@ func waitTxConfirmed(
 	var receipt *types.Receipt
 	var nonce uint64
 	var err error
-	txTimeout := getTxTimeout()
-	txQueryTimeout := getTxQueryTimeout()
-	txQueryRetryInterval := getTxQueryRetryInterval()
+	txTimeout := GetTxTimeout()
+	txQueryTimeout := GetTxQueryTimeout()
+	txQueryRetryInterval := GetTxQueryRetryInterval()
 	deadline := time.Now().Add(txTimeout)
 	queryTicker := time.NewTicker(pollingInterval)
 	defer queryTicker.Stop()
