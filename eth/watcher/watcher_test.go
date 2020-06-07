@@ -18,8 +18,6 @@ const (
 	perBlock = 3         // Number of log events per block
 	bigIndex = 999999999 // Testing a visible "Removed" log
 	errProb  = 10        // Random on-chain error probability 1/N
-
-	LedgerMigrateABI = "[{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"channelId\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"newLedgerAddr\",\"type\":\"address\"}],\"name\":\"MigrateChannelTo\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"channelId\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"oldLedgerAddr\",\"type\":\"address\"}],\"name\":\"MigrateChannelFrom\",\"type\":\"event\"}]"
 )
 
 func init() {
@@ -468,12 +466,12 @@ func TestMakeFilterQuery(t *testing.T) {
 	ws := NewWatchService(client, dal, 1)
 	defer ws.Close()
 
-	abi := LedgerMigrateABI
+	ledgerMigrateABI := "[{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"channelId\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"newLedgerAddr\",\"type\":\"address\"}],\"name\":\"MigrateChannelTo\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"channelId\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"oldLedgerAddr\",\"type\":\"address\"}],\"name\":\"MigrateChannelFrom\",\"type\":\"event\"}]"
 	addr := common.HexToAddress("5963e46cf9f9700e70d4d1bc09210711ab4a20b4")
 	name := "MigrateChannelTo"
 	startBlock := big.NewInt(1234)
 
-	q, err := ws.MakeFilterQuery(addr, abi, name, startBlock)
+	q, err := ws.MakeFilterQuery(addr, ledgerMigrateABI, name, startBlock)
 	if err != nil {
 		t.Errorf("Cannot create FilterQuery for %s: %v", name, err)
 	}
@@ -489,13 +487,13 @@ func TestMakeFilterQuery(t *testing.T) {
 	}
 
 	name = "foobar"
-	q, err = ws.MakeFilterQuery(addr, abi, name, nil)
+	q, err = ws.MakeFilterQuery(addr, ledgerMigrateABI, name, nil)
 	if err == nil {
 		t.Errorf("Created FilterQuery for bad event name %s: %v", name, q)
 	}
 
 	name = "foobar"
-	abi = "some [ bad { JSON"
+	abi := "some [ bad { JSON"
 	q, err = ws.MakeFilterQuery(addr, abi, name, nil)
 	if err == nil {
 		t.Errorf("Created FilterQuery for bad ABI: %v", q)

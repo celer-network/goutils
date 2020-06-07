@@ -23,6 +23,7 @@ jobs:
     - name: Build
       run: |
         go build github.com/celer-network/goutils/eth
+        go build github.com/celer-network/goutils/eth/monitor
         go build github.com/celer-network/goutils/eth/watcher
         go build github.com/celer-network/goutils/log
         go build github.com/celer-network/goutils/jsonpbhex
@@ -34,4 +35,5 @@ jobs:
       run: |
         go test github.com/celer-network/goutils/lrucache
         go test github.com/celer-network/goutils/kaf
+        go test github.com/celer-network/goutils/eth/monitor
         go test github.com/celer-network/goutils/eth/watcher
