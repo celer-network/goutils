@@ -62,20 +62,20 @@ type WatchService struct {
 // requests from on-chain event logs that are older than a specified
 // number of on-chain blocks.
 type Watch struct {
-	name         string               // Unique name of registered watch
-	service      *WatchService        // Service owning this watch
-	ackWait      bool                 // Is it waiting for an ACK from the app?
-	lastAck      bool                 // One last ACK is allowed after close
-	ackID        LogEventID           // ID of log event pending an ACK
-	lastID       *LogEventID          // ID of log event for resuming (or nil)
-	blkDelay     uint64               // Log event delay in number of blocks
-	blkInterval  uint64               // Log event polling interval in blocks
-	fromBlock    uint64               // Start a fetch from this block number
-	query        ethereum.FilterQuery // On-chain event log query
-	mu           sync.Mutex           // Guards log queue and "closed" flag
-	logQueue     *list.List           // Queue of buffered log events
-	logQueueCond *sync.Cond           // Condvar for waiting on the queue
-	closed       bool                 // Is the watch closed?
+	name          string               // Unique name of registered watch
+	service       *WatchService        // Service owning this watch
+	ackWait       bool                 // Is it waiting for an ACK from the app?
+	lastAck       bool                 // One last ACK is allowed after close
+	ackID         LogEventID           // ID of log event pending an ACK
+	lastID        *LogEventID          // ID of log event for resuming (or nil)
+	blkDelay      uint64               // Log event delay in number of blocks
+	checkInterval uint64               // Check event every checkInterval * service.polling
+	fromBlock     uint64               // Start a fetch from this block number
+	query         ethereum.FilterQuery // On-chain event log query
+	mu            sync.Mutex           // Guards log queue and "closed" flag
+	logQueue      *list.List           // Queue of buffered log events
+	logQueueCond  *sync.Cond           // Condvar for waiting on the queue
+	closed        bool                 // Is the watch closed?
 }
 
 // WatchClient is an interface for the subset of functions of the Go-Ethereum
@@ -218,7 +218,9 @@ func (ws *WatchService) unregister(name string) {
 // MakeFilterQuery constructs an Ethereum FilterQuery structure from these
 // event and contract parameters: address, raw ABI string, event name, and
 // the optional start block number.
-func (ws *WatchService) MakeFilterQuery(addr common.Address, rawABI string, eventName string, startBlock *big.Int) (ethereum.FilterQuery, error) {
+func (ws *WatchService) MakeFilterQuery(
+	addr common.Address, rawABI string, eventName string, startBlock *big.Int) (ethereum.FilterQuery, error) {
+
 	var q ethereum.FilterQuery
 
 	parsedABI, err := abi.JSON(strings.NewReader((rawABI)))
@@ -244,18 +246,20 @@ func (ws *WatchService) MakeFilterQuery(addr common.Address, rawABI string, even
 // from on-chain, but measured in block numbers (as a delta).
 // If "reset" is enabled, the watcher ignores the previously stored
 // position in the subscription which resets the stream to its start.
-func (ws *WatchService) NewWatch(name string, query ethereum.FilterQuery, blkDelay, blkInterval uint64, reset bool) (*Watch, error) {
+func (ws *WatchService) NewWatch(
+	name string, query ethereum.FilterQuery, blkDelay, checkInterval uint64, reset bool) (*Watch, error) {
+
 	if name == "" {
 		return nil, fmt.Errorf("watch name not specified")
 	}
 
 	w := &Watch{
-		name:        name,
-		service:     ws,
-		blkDelay:    blkDelay,
-		blkInterval: blkInterval,
-		query:       query,
-		logQueue:    list.New(),
+		name:          name,
+		service:       ws,
+		blkDelay:      blkDelay,
+		checkInterval: checkInterval,
+		query:         query,
+		logQueue:      list.New(),
 	}
 
 	w.logQueueCond = sync.NewCond(&w.mu) // condvar uses "mu"
@@ -279,7 +283,7 @@ func (w *Watch) watchLogEvents(reset bool) {
 	log.Debugf("watchLogEvents: start %s from %d", w.name, w.fromBlock)
 
 	// The polling interval is computed in relation to block polling.
-	polling := w.blkInterval * w.service.polling
+	polling := w.checkInterval * w.service.polling
 	ticker := time.NewTicker(time.Duration(polling) * time.Millisecond)
 	defer ticker.Stop()
 
@@ -370,7 +374,9 @@ func (w *Watch) fetchLogEvents() {
 	// Fetch server-side filtered log events in the target range of
 	// block numbers.  The block delay limit is used to avoid fetching
 	// recently mined blocks that may still be undone by a chain reorg.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second) // https://infura.io/docs/ethereum/json-rpc/eth-getLogs up to 10s
+
+	// https://infura.io/docs/ethereum/json-rpc/eth-getLogs up to 10s
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	toBlock := blkNum - w.blkDelay

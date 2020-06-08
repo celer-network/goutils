@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	// default log watch polling as a multiplier of block number if not specified
-	// ie. 1 means check log every block
+	// default event polling interval as a multiplier of WatchService.polling
+	// ie. 1 means check log every WatchService.polling
 	defaultCheckInterval = uint64(1)
 )
 
@@ -65,7 +65,7 @@ func (dq *DeadlineQueue) Top() (top interface{}) {
 // Config is used by external callers to pass in info, will be converted to Event for internal use
 // Reason not use Event directly: Event is more like internal struct
 // most fields are from previous MonitorService Monitor func args
-// CheckInterval is newly added, meanging to check log for event every x blocks.
+// CheckInterval means to check log for event every CheckInterval x WatchService.polling
 // if 0 or not set, defaultCheckInterval (1) will be used
 type Config struct {
 	EventName            string
@@ -187,15 +187,14 @@ func (s *Service) monitorDeadlines() {
 	}
 }
 
-// Create a watch for the given event.  Use or skip using the StartBlock
+// Create a watch for the given event. Use or skip using the StartBlock
 // value from the event: the first time a watch is created for an event,
 // the StartBlock should be used.  In follow-up re-creation of the watch
 // after the previous watch was disconnected, skip using the StartBlock
 // because the watch itself has persistence and knows the most up-to-date
 // block to resume from instead of the original event StartBlock which is
-// stale information by then.  If "reset" is enabled, the watcher ignores the
-// previously stored position in the subscription which resets the stream to its
-// start.
+// stale information by then. If "reset" is enabled, the watcher ignores the
+// previously stored position in the subscription which resets the stream to its start.
 func (s *Service) createEventWatch(
 	e Event, useStartBlock bool, reset bool) (*watcher.Watch, error) {
 	var startBlock *big.Int
