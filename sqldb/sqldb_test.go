@@ -571,6 +571,8 @@ func TestTransactionConflict_crdb(t *testing.T) {
 	runWithDatabase(t, false, testTransactionConflict)
 }
 
-func TestTransactionConflict_sqlite(t *testing.T) {
-	runWithDatabase(t, true, testTransactionConflict)
-}
+// With a single SQLite connection configured, this test deadlocks because
+// it is designed to force the need of concurrent progress on 2 transactions.
+//func TestTransactionConflict_sqlite(t *testing.T) {
+//	runWithDatabase(t, true, testTransactionConflict)
+//}
