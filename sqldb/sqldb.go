@@ -82,6 +82,11 @@ func NewDb(driver, info string, poolSize int) (*Db, error) {
 			db.SetMaxIdleConns(poolSize)
 			db.SetMaxOpenConns(poolSize)
 		}
+	} else if driver == "sqlite3" {
+		// Force a single connection to serialize all SQLite operations and avoid
+		// the "database is locked" errors due to the lack of concurrent writes.
+		// As a downside, the read operations are also serialized.
+		db.SetMaxOpenConns(1)
 	}
 
 	d := &Db{
