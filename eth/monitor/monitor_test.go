@@ -155,7 +155,7 @@ func TestDeadline(t *testing.T) {
 	defer client.Close()
 	defer ws.Close()
 
-	ms := monitor.NewService(ws, 0 /* blockDelay */, true /* enabled */, "" /* rpcAddr */)
+	ms := monitor.NewService(ws, 0 /* blockDelay */, true /* enabled */)
 	ms.Init()
 
 	// Note: the block number producer is ticking every 10ms.
@@ -230,7 +230,7 @@ func TestEvent(t *testing.T) {
 	defer client.Close()
 	defer ws.Close()
 
-	ms := monitor.NewService(ws, 0 /* blockDelay */, true /* enabled */, "" /* rpcAddr */)
+	ms := monitor.NewService(ws, 0 /* blockDelay */, true /* enabled */)
 	ms.Init()
 
 	ledgerMigrateABI := "[{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"channelId\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"newLedgerAddr\",\"type\":\"address\"}],\"name\":\"MigrateChannelTo\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"channelId\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"oldLedgerAddr\",\"type\":\"address\"}],\"name\":\"MigrateChannelFrom\",\"type\":\"event\"}]"

@@ -98,16 +98,13 @@ type Service struct {
 	events        map[CallbackID]Event    // events
 	mu            sync.Mutex
 	blockDelay    uint64
-	// HACK HACK, the following fields should be removed
-	enabled bool
-	rpcAddr string
+	enabled       bool
 }
 
-// NewService starts a new monitor service. Currently, if "enabled" is false,
-// event monitoring will be disabled, and the IP address of the cNode given as
-// "rpcAddr" will be printed.
+// NewService starts a new monitor service.
+// If "enabled" is false, event monitoring will be disabled.
 func NewService(
-	watch *watcher.WatchService, blockDelay uint64, enabled bool, rpcAddr string) *Service {
+	watch *watcher.WatchService, blockDelay uint64, enabled bool) *Service {
 	s := &Service{
 		watch:       watch,
 		deadlines:   make(map[CallbackID]Deadline),
@@ -115,7 +112,6 @@ func NewService(
 		events:      make(map[CallbackID]Event),
 		blockDelay:  blockDelay,
 		enabled:     enabled,
-		rpcAddr:     rpcAddr,
 	}
 	return s
 }
@@ -219,7 +215,7 @@ func (s *Service) createEventWatch(
 
 func (s *Service) Monitor(cfg *Config, callback func(CallbackID, types.Log)) (CallbackID, error) {
 	if !s.enabled {
-		log.Infof("OSP (%s) not listening to on-chain logs", s.rpcAddr)
+		log.Info("monitor disabled, not listening to on-chain logs")
 		return 0, nil
 	}
 	addr := cfg.Contract.GetAddr()
