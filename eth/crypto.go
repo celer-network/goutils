@@ -65,7 +65,7 @@ func (s *CelerSigner) SignEthTransaction(rawTx []byte) ([]byte, error) {
 	if err := rlp.DecodeBytes(rawTx, tx); err != nil {
 		return nil, err
 	}
-	eip155Signer := types.NewEIP155Signer(getChainId())
+	eip155Signer := types.NewEIP155Signer(GetChainId())
 	signature, err := crypto.Sign(eip155Signer.Hash(tx).Bytes(), s.key)
 	if err != nil {
 		return nil, err

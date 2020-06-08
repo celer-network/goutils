@@ -110,8 +110,8 @@ func (t *Transactor) transact(
 		return nil, err
 	}
 	signer.GasPrice = suggestedPrice
-	minGas := getMinGasGwei()
-	maxGas := getMaxGasGwei()
+	minGas := GetMinGasGwei()
+	maxGas := GetMaxGasGwei()
 	if minGas > 0 { // gas can't be lower than minGas
 		minPrice := new(big.Int).SetUint64(minGas * 1e9) // 1e9 is 1G
 		// minPrice is larger than suggested, use minPrice
@@ -164,12 +164,12 @@ func (t *Transactor) transact(
 				go func() {
 					txHash := tx.Hash().Hex()
 					log.Debugf("Waiting for tx %s to be mined", txHash)
-					blockDelay := getBlockDelay()
-					quickCatchBlockDelay := getQuickCatchBlockDelay()
+					blockDelay := GetBlockDelay()
+					quickCatchBlockDelay := GetQuickCatchBlockDelay()
 					if txconfig.QuickCatch && quickCatchBlockDelay < blockDelay {
 						blockDelay = quickCatchBlockDelay
 					}
-					receipt, err := WaitMined(context.Background(), client, tx, blockDelay, getBlockPollingIntervalSec())
+					receipt, err := WaitMined(context.Background(), client, tx, blockDelay, GetBlockPollingIntervalSec())
 					if err != nil {
 						log.Error(err)
 						if errors.Is(err, ErrTxDropped) && handler.OnDropped != nil {
@@ -200,7 +200,7 @@ func (t *Transactor) Address() common.Address {
 }
 
 func (t *Transactor) WaitMined(txHash string) (*types.Receipt, error) {
-	return WaitMinedWithTxHash(context.Background(), t.client, txHash, getBlockDelay(), getBlockPollingIntervalSec())
+	return WaitMinedWithTxHash(context.Background(), t.client, txHash, GetBlockDelay(), GetBlockPollingIntervalSec())
 }
 
 func (t *Transactor) newTransactOpts() *bind.TransactOpts {

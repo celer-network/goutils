@@ -77,55 +77,55 @@ func SetChainId(chainId *big.Int) {
 	conf.chainId = chainId
 }
 
-func getTxTimeout() time.Duration {
+func GetTxTimeout() time.Duration {
 	confLock.RLock()
 	defer confLock.RUnlock()
 	return conf.txTimeout
 }
 
-func getTxQueryTimeout() time.Duration {
+func GetTxQueryTimeout() time.Duration {
 	confLock.RLock()
 	defer confLock.RUnlock()
 	return conf.txQueryTimeout
 }
 
-func getTxQueryRetryInterval() time.Duration {
+func GetTxQueryRetryInterval() time.Duration {
 	confLock.RLock()
 	defer confLock.RUnlock()
 	return conf.txQueryRetryInterval
 }
 
-func getMinGasGwei() uint64 {
+func GetMinGasGwei() uint64 {
 	confLock.RLock()
 	defer confLock.RUnlock()
 	return conf.minGasGwei
 }
 
-func getMaxGasGwei() uint64 {
+func GetMaxGasGwei() uint64 {
 	confLock.RLock()
 	defer confLock.RUnlock()
 	return conf.maxGasGwei
 }
 
-func getBlockDelay() uint64 {
+func GetBlockDelay() uint64 {
 	confLock.RLock()
 	defer confLock.RUnlock()
 	return conf.blockDelay
 }
 
-func getQuickCatchBlockDelay() uint64 {
+func GetQuickCatchBlockDelay() uint64 {
 	confLock.RLock()
 	defer confLock.RUnlock()
 	return conf.quickCatchBlockDelay
 }
 
-func getBlockPollingIntervalSec() uint64 {
+func GetBlockPollingIntervalSec() uint64 {
 	confLock.RLock()
 	defer confLock.RUnlock()
 	return conf.blockPollingIntervalSec
 }
 
-func getChainId() *big.Int {
+func GetChainId() *big.Int {
 	confLock.RLock()
 	defer confLock.RUnlock()
 	return conf.chainId
