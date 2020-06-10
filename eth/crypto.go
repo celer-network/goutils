@@ -6,7 +6,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 
-	"github.com/celer-network/goutils/log"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -77,12 +76,15 @@ func (s *CelerSigner) SignEthTransaction(rawTx []byte) ([]byte, error) {
 	return rlp.EncodeToBytes(tx)
 }
 
-func SigIsValid(signer common.Address, data []byte, sig []byte) bool {
-	recoveredAddr := RecoverSigner(data, sig)
+func IsSignatureValid(signer common.Address, data []byte, sig []byte) bool {
+	recoveredAddr, err := RecoverSigner(data, sig)
+	if err != nil {
+		return false
+	}
 	return recoveredAddr == signer
 }
 
-func RecoverSigner(data []byte, sig []byte) common.Address {
+func RecoverSigner(data []byte, sig []byte) (common.Address, error) {
 	if len(sig) == 65 { // we could return zeroAddr if len not 65
 		if sig[64] == 27 || sig[64] == 28 {
 			// SigToPub only expect v to be 0 or 1,
@@ -94,11 +96,10 @@ func RecoverSigner(data []byte, sig []byte) common.Address {
 	}
 	pubKey, err := crypto.SigToPub(GeneratePrefixedHash(data), sig)
 	if err != nil {
-		log.Errorf("sig error: %v, sig: %x", err, sig)
-		return common.Address{}
+		return common.Address{}, err
 	}
 	recoveredAddr := crypto.PubkeyToAddress(*pubKey)
-	return recoveredAddr
+	return recoveredAddr, nil
 }
 
 func GeneratePrefixedHash(data []byte) []byte {
