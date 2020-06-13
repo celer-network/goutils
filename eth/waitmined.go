@@ -54,7 +54,7 @@ func waitMined(
 	if ec == nil {
 		return nil, fmt.Errorf("nil ethclient")
 	}
-	txopts := defaultTxOptions
+	txopts := defaultTxOptions()
 	for _, o := range opts {
 		o.apply(&txopts)
 	}

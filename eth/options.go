@@ -13,25 +13,27 @@ type txOptions struct {
 	maxGasGwei         uint64        // transact
 	addGasGwei         uint64        // transact
 	gasLimit           uint64        // transact
+	blockDelay         uint64        // waitMined
+	pollingInterval    time.Duration // waitMined
 	timeout            time.Duration // waitMined
 	queryTimeout       time.Duration // waitMined
 	queryRetryInterval time.Duration // waitMined
-	pollingInterval    time.Duration // waitMined
-	blockDelay         uint64        // waitMined
 }
 
 const (
+	defaultPollingInterval      = 15 * time.Second
 	defaultTxTimeout            = 6 * time.Hour
 	defaultTxQueryTimeout       = 2 * time.Minute
 	defaultTxQueryRetryInterval = 10 * time.Second
-	defaultPollingInterval      = 15 * time.Second
 )
 
-var defaultTxOptions = txOptions{
-	timeout:            defaultTxTimeout,
-	queryTimeout:       defaultTxQueryTimeout,
-	queryRetryInterval: defaultTxQueryRetryInterval,
-	pollingInterval:    defaultPollingInterval,
+func defaultTxOptions() txOptions {
+	return txOptions{
+		pollingInterval:    defaultPollingInterval,
+		timeout:            defaultTxTimeout,
+		queryTimeout:       defaultTxQueryTimeout,
+		queryRetryInterval: defaultTxQueryRetryInterval,
+	}
 }
 
 type TxOption interface {
@@ -82,6 +84,20 @@ func WithGasLimit(l uint64) TxOption {
 	})
 }
 
+func WithBlockDelay(d uint64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.blockDelay = d
+	})
+}
+
+func WithPollingInterval(t time.Duration) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		if t != 0 {
+			o.pollingInterval = t
+		}
+	})
+}
+
 func WithTimeout(t time.Duration) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		if t != 0 {
@@ -103,19 +119,5 @@ func WithQueryRetryInterval(t time.Duration) TxOption {
 		if t != 0 {
 			o.queryRetryInterval = t
 		}
-	})
-}
-
-func WithPollingInterval(t time.Duration) TxOption {
-	return newFuncTxOption(func(o *txOptions) {
-		if t != 0 {
-			o.pollingInterval = t
-		}
-	})
-}
-
-func WithBlockDelay(d uint64) TxOption {
-	return newFuncTxOption(func(o *txOptions) {
-		o.blockDelay = d
 	})
 }

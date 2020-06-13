@@ -28,6 +28,7 @@ type Transactor struct {
 	client  *ethclient.Client
 	nonce   uint64
 	sentTx  bool
+	dopts   txOptions // default transactor tx options
 	lock    sync.Mutex
 }
 
@@ -42,7 +43,8 @@ func NewTransactor(
 	keyjson string,
 	passphrase string,
 	client *ethclient.Client,
-	chainId *big.Int) (*Transactor, error) {
+	chainId *big.Int,
+	opts ...TxOption) (*Transactor, error) {
 	address, privKey, err := GetAddrPrivKeyFromKeystore(keyjson, passphrase)
 	if err != nil {
 		return nil, err
@@ -51,21 +53,32 @@ func NewTransactor(
 	if err != nil {
 		return nil, err
 	}
+	txopts := defaultTxOptions()
+	for _, o := range opts {
+		o.apply(&txopts)
+	}
 	return &Transactor{
 		address: address,
 		signer:  signer,
 		client:  client,
+		dopts:   txopts,
 	}, nil
 }
 
 func NewTransactorByExternalSigner(
 	address common.Address,
 	signer Signer,
-	client *ethclient.Client) *Transactor {
+	client *ethclient.Client,
+	opts ...TxOption) *Transactor {
+	txopts := defaultTxOptions()
+	for _, o := range opts {
+		o.apply(&txopts)
+	}
 	return &Transactor{
 		address: address,
 		signer:  signer,
 		client:  client,
+		dopts:   txopts,
 	}
 }
 
@@ -98,12 +111,12 @@ func (t *Transactor) transact(
 	handler *TransactionStateHandler,
 	method TxMethod,
 	opts ...TxOption) (*types.Transaction, error) {
-	txopts := &txOptions{}
-	for _, o := range opts {
-		o.apply(txopts)
-	}
 	t.lock.Lock()
 	defer t.lock.Unlock()
+	txopts := t.dopts
+	for _, o := range opts {
+		o.apply(&txopts)
+	}
 	signer := t.newTransactOpts()
 	client := t.client
 	suggestedPrice, err := client.SuggestGasPrice(context.Background())
@@ -161,7 +174,13 @@ func (t *Transactor) transact(
 				go func() {
 					txHash := tx.Hash().Hex()
 					log.Debugf("Waiting for tx %s to be mined", txHash)
-					receipt, err := WaitMined(context.Background(), client, tx, opts...)
+					receipt, err := WaitMined(
+						context.Background(), client, tx,
+						WithBlockDelay(txopts.blockDelay),
+						WithPollingInterval(txopts.pollingInterval),
+						WithTimeout(txopts.timeout),
+						WithQueryTimeout(txopts.queryTimeout),
+						WithQueryRetryInterval(txopts.queryRetryInterval))
 					if err != nil {
 						if handler.OnError != nil {
 							handler.OnError(tx, err)
@@ -189,7 +208,17 @@ func (t *Transactor) Address() common.Address {
 }
 
 func (t *Transactor) WaitMined(txHash string, opts ...TxOption) (*types.Receipt, error) {
-	return WaitMinedWithTxHash(context.Background(), t.client, txHash, opts...)
+	txopts := t.dopts
+	for _, o := range opts {
+		o.apply(&txopts)
+	}
+	return WaitMinedWithTxHash(
+		context.Background(), t.client, txHash,
+		WithBlockDelay(txopts.blockDelay),
+		WithPollingInterval(txopts.pollingInterval),
+		WithTimeout(txopts.timeout),
+		WithQueryTimeout(txopts.queryTimeout),
+		WithQueryRetryInterval(txopts.queryRetryInterval))
 }
 
 func (t *Transactor) newTransactOpts() *bind.TransactOpts {

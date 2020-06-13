@@ -38,10 +38,11 @@ func NewTransactorPool(transactors []*Transactor) (*TransactorPool, error) {
 func NewTransactorPoolFromConfig(
 	client *ethclient.Client,
 	configs []*TransactorConfig,
-	chainId *big.Int) (*TransactorPool, error) {
+	chainId *big.Int,
+	opts ...TxOption) (*TransactorPool, error) {
 	transactors := []*Transactor{}
 	for _, config := range configs {
-		transactor, err := NewTransactor(config.Keyjson, config.Passphrase, client, chainId)
+		transactor, err := NewTransactor(config.Keyjson, config.Passphrase, client, chainId, opts...)
 		if err != nil {
 			log.Errorln(err)
 		} else {
