@@ -25,13 +25,26 @@ var (
 	ErrMissingField = errors.New("missing required field 'transactionHash' for Log")
 )
 
+const (
+	defaultTxTimeout            = 6 * time.Hour
+	defaultTxQueryTimeout       = 2 * time.Minute
+	defaultTxQueryRetryInterval = 10 * time.Second
+	defaultPollingInterval      = 15 * time.Second
+)
+
+var defaultWaitMinedOptions = txOptions{
+	timeout:            defaultTxTimeout,
+	queryTimeout:       defaultTxQueryTimeout,
+	queryRetryInterval: defaultTxQueryRetryInterval,
+	pollingInterval:    defaultPollingInterval,
+}
+
 func WaitMined(
 	ctx context.Context,
 	ec *ethclient.Client,
 	tx *types.Transaction,
-	blockDelay uint64,
-	pollingIntervalSec uint64) (*types.Receipt, error) {
-	return waitMined(ctx, ec, tx, tx.Hash(), blockDelay, pollingIntervalSec)
+	opts ...TxOption) (*types.Receipt, error) {
+	return waitMined(ctx, ec, tx, tx.Hash(), opts...)
 }
 
 // WaitMinedWithTxHash only wait with given txhash, without other info such as nonce.
@@ -40,9 +53,8 @@ func WaitMinedWithTxHash(
 	ctx context.Context,
 	ec *ethclient.Client,
 	txHash string,
-	blockDelay uint64,
-	pollingIntervalSec uint64) (*types.Receipt, error) {
-	return waitMined(ctx, ec, nil, common.HexToHash(txHash), blockDelay, pollingIntervalSec)
+	opts ...TxOption) (*types.Receipt, error) {
+	return waitMined(ctx, ec, nil, common.HexToHash(txHash), opts...)
 }
 
 // waitMinedTx waits for tx to be mined on the blockchain
@@ -52,13 +64,13 @@ func waitMined(
 	ec *ethclient.Client,
 	tx *types.Transaction,
 	txHash common.Hash,
-	blockDelay uint64,
-	pollingIntervalSec uint64) (*types.Receipt, error) {
-	if pollingIntervalSec == 0 {
-		return nil, fmt.Errorf("invalid polling interval")
-	}
+	opts ...TxOption) (*types.Receipt, error) {
 	if ec == nil {
 		return nil, fmt.Errorf("nil ethclient")
+	}
+	txopts := defaultWaitMinedOptions
+	for _, o := range opts {
+		o.apply(&txopts)
 	}
 	var txSender common.Address
 	if tx != nil {
@@ -69,10 +81,9 @@ func waitMined(
 		}
 		txSender = msg.From()
 	}
-	pollingInterval := time.Duration(pollingIntervalSec) * time.Second
-	receipt, err := waitTxConfirmed(ctx, ec, tx, txSender, txHash, blockDelay, pollingInterval)
+	receipt, err := waitTxConfirmed(ctx, ec, tx, txSender, txHash, &txopts)
 	for errors.Is(err, ErrTxReorg) { // retry if dropped due to chain reorg
-		receipt, err = waitTxConfirmed(ctx, ec, tx, txSender, txHash, blockDelay, pollingInterval)
+		receipt, err = waitTxConfirmed(ctx, ec, tx, txSender, txHash, &txopts)
 	}
 	return receipt, err
 }
@@ -83,30 +94,26 @@ func waitTxConfirmed(
 	tx *types.Transaction,
 	txSender common.Address,
 	txHash common.Hash,
-	blockDelay uint64,
-	pollingInterval time.Duration) (*types.Receipt, error) {
+	opts *txOptions) (*types.Receipt, error) {
 	var receipt *types.Receipt
 	var nonce uint64
 	var err error
-	txTimeout := GetTxTimeout()
-	txQueryTimeout := GetTxQueryTimeout()
-	txQueryRetryInterval := GetTxQueryRetryInterval()
-	deadline := time.Now().Add(txTimeout)
-	queryTicker := time.NewTicker(pollingInterval)
+	deadline := time.Now().Add(opts.timeout)
+	queryTicker := time.NewTicker(opts.pollingInterval)
 	defer queryTicker.Stop()
 	var pending bool
 	// wait tx to be mined
 	for {
 		if tx != nil {
-			nonce, err = currentNonce(ctx, ec, txSender, txQueryTimeout, txQueryRetryInterval)
+			nonce, err = currentNonce(ctx, ec, txSender, opts.queryTimeout, opts.queryRetryInterval)
 			if err != nil {
 				return nil, fmt.Errorf("tx %x NonceAt err: %w", txHash, err)
 			}
 		}
-		receipt, err = transactionReceipt(ctx, ec, txHash, txQueryTimeout, txQueryRetryInterval)
+		receipt, err = transactionReceipt(ctx, ec, txHash, opts.queryTimeout, opts.queryRetryInterval)
 		if err == nil {
-			log.Debugf("Transaction %x mined. Waiting for %d block confirmations", txHash, blockDelay)
-			if blockDelay == 0 {
+			log.Debugf("Transaction %x mined. Waiting for %d block confirmations", txHash, opts.blockDelay)
+			if opts.blockDelay == 0 {
 				return receipt, nil
 			}
 			break
@@ -118,7 +125,7 @@ func waitTxConfirmed(
 				}
 			}
 			if !pending && time.Now().After(deadline) {
-				_, pending, err = transactionByHash(ctx, ec, txHash, txQueryTimeout, txQueryRetryInterval)
+				_, pending, err = transactionByHash(ctx, ec, txHash, opts.queryTimeout, opts.queryRetryInterval)
 				if err != nil {
 					return nil, fmt.Errorf("tx %x TransactionByHash err: %w", txHash, err)
 				}
@@ -137,12 +144,12 @@ func waitTxConfirmed(
 		}
 	}
 	// wait for enough block confirmations
-	confirmBlk := new(big.Int).Add(receipt.BlockNumber, new(big.Int).SetUint64(blockDelay))
+	confirmBlk := new(big.Int).Add(receipt.BlockNumber, new(big.Int).SetUint64(opts.blockDelay))
 	var header *types.Header
 	for {
-		header, err = blockHeader(ctx, ec, txQueryTimeout, txQueryRetryInterval)
+		header, err = blockHeader(ctx, ec, opts.queryTimeout, opts.queryRetryInterval)
 		if err == nil && confirmBlk.Cmp(header.Number) < 0 {
-			receipt, err = transactionReceipt(ctx, ec, txHash, txQueryTimeout, txQueryRetryInterval)
+			receipt, err = transactionReceipt(ctx, ec, txHash, opts.queryTimeout, opts.queryRetryInterval)
 			if err == nil {
 				log.Debugf("tx %x confirmed!", txHash)
 				return receipt, nil

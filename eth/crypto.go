@@ -5,6 +5,7 @@ package eth
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -27,24 +28,29 @@ type Signer interface {
 }
 
 type CelerSigner struct {
-	key *ecdsa.PrivateKey
+	key     *ecdsa.PrivateKey
+	chainId *big.Int
 }
 
-func NewSigner(privateKey string) (*CelerSigner, error) {
+func NewSigner(privateKey string, opts ...TxOption) (*CelerSigner, error) {
+	txopts := &txOptions{}
+	for _, o := range opts {
+		o.apply(txopts)
+	}
 	key, err := crypto.HexToECDSA(privateKey)
 	if err != nil {
 		return nil, err
 	}
-	c := &CelerSigner{key: key}
+	c := &CelerSigner{key: key, chainId: txopts.chainId}
 	return c, nil
 }
 
-func NewSignerFromKeystore(keyjson, passphrase string) (*CelerSigner, error) {
+func NewSignerFromKeystore(keyjson, passphrase string, opts ...TxOption) (*CelerSigner, error) {
 	_, privkey, err := GetAddrPrivKeyFromKeystore(keyjson, passphrase)
 	if err != nil {
 		return nil, err
 	}
-	return NewSigner(privkey)
+	return NewSigner(privkey, opts...)
 }
 
 // input data: a byte array of raw message to be signed
@@ -64,7 +70,7 @@ func (s *CelerSigner) SignEthTransaction(rawTx []byte) ([]byte, error) {
 	if err := rlp.DecodeBytes(rawTx, tx); err != nil {
 		return nil, err
 	}
-	eip155Signer := types.NewEIP155Signer(GetChainId())
+	eip155Signer := types.NewEIP155Signer(s.chainId)
 	signature, err := crypto.Sign(eip155Signer.Hash(tx).Bytes(), s.key)
 	if err != nil {
 		return nil, err
