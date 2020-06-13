@@ -111,23 +111,23 @@ func (t *Transactor) transact(
 		return nil, err
 	}
 	signer.GasPrice = suggestedPrice
-	minGas := txopts.minGasGwei
-	maxGas := txopts.maxGasGwei
-	if minGas > 0 { // gas can't be lower than minGas
-		minPrice := new(big.Int).SetUint64(minGas * 1e9) // 1e9 is 1G
+	if txopts.addGasGwei > 0 { // add gas price to the suggested value to speed up transactions
+		addPrice := new(big.Int).SetUint64(txopts.addGasGwei * 1e9) // 1e9 is 1G
+		signer.GasPrice = signer.GasPrice.Add(signer.GasPrice, addPrice)
+	}
+	if txopts.minGasGwei > 0 { // gas can't be lower than minGas
+		minPrice := new(big.Int).SetUint64(txopts.minGasGwei * 1e9)
 		// minPrice is larger than suggested, use minPrice
-		if minPrice.Cmp(suggestedPrice) > 0 {
+		if minPrice.Cmp(signer.GasPrice) > 0 {
 			signer.GasPrice = minPrice
-		} else {
-			signer.GasPrice = suggestedPrice
 		}
 	}
-	if maxGas > 0 { // maxGas 0 means no cap on gas price, otherwise won't set bigger than it
-		capPrice := new(big.Int).SetUint64(maxGas * 1e9) // 1e9 is 1G
+	if txopts.maxGasGwei > 0 { // maxGas 0 means no cap on gas price, otherwise won't set bigger than it
+		maxPrice := new(big.Int).SetUint64(txopts.maxGasGwei * 1e9)
 		// GasPrice is larger than allowed cap, set to cap
-		if capPrice.Cmp(signer.GasPrice) < 0 {
-			log.Warnf("suggested gas price %s larger than cap %s, set to cap", signer.GasPrice, capPrice)
-			signer.GasPrice = capPrice
+		if maxPrice.Cmp(signer.GasPrice) < 0 {
+			log.Warnf("suggested gas price %s larger than cap %s, set to cap", signer.GasPrice, maxPrice)
+			signer.GasPrice = maxPrice
 		}
 	}
 	signer.GasLimit = txopts.gasLimit

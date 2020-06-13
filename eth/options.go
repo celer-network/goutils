@@ -11,6 +11,7 @@ type txOptions struct {
 	ethValue           *big.Int      // transact
 	minGasGwei         uint64        // transact
 	maxGasGwei         uint64        // transact
+	addGasGwei         uint64        // transact
 	gasLimit           uint64        // transact
 	timeout            time.Duration // waitMined
 	queryTimeout       time.Duration // waitMined
@@ -53,6 +54,12 @@ func WithMinGasGwei(g uint64) TxOption {
 func WithMaxGasGwei(g uint64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.maxGasGwei = g
+	})
+}
+
+func WithAddGasGwei(g uint64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.addGasGwei = g
 	})
 }
 
