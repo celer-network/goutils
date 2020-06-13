@@ -18,7 +18,20 @@ type txOptions struct {
 	queryRetryInterval time.Duration // waitMined
 	pollingInterval    time.Duration // waitMined
 	blockDelay         uint64        // waitMined
-	chainId            *big.Int      // signer
+}
+
+const (
+	defaultTxTimeout            = 6 * time.Hour
+	defaultTxQueryTimeout       = 2 * time.Minute
+	defaultTxQueryRetryInterval = 10 * time.Second
+	defaultPollingInterval      = 15 * time.Second
+)
+
+var defaultTxOptions = txOptions{
+	timeout:            defaultTxTimeout,
+	queryTimeout:       defaultTxQueryTimeout,
+	queryRetryInterval: defaultTxQueryRetryInterval,
+	pollingInterval:    defaultPollingInterval,
 }
 
 type TxOption interface {
@@ -104,11 +117,5 @@ func WithPollingInterval(t time.Duration) TxOption {
 func WithBlockDelay(d uint64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.blockDelay = d
-	})
-}
-
-func WithChainId(i *big.Int) TxOption {
-	return newFuncTxOption(func(o *txOptions) {
-		o.chainId = i
 	})
 }

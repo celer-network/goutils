@@ -25,20 +25,6 @@ var (
 	ErrMissingField = errors.New("missing required field 'transactionHash' for Log")
 )
 
-const (
-	defaultTxTimeout            = 6 * time.Hour
-	defaultTxQueryTimeout       = 2 * time.Minute
-	defaultTxQueryRetryInterval = 10 * time.Second
-	defaultPollingInterval      = 15 * time.Second
-)
-
-var defaultWaitMinedOptions = txOptions{
-	timeout:            defaultTxTimeout,
-	queryTimeout:       defaultTxQueryTimeout,
-	queryRetryInterval: defaultTxQueryRetryInterval,
-	pollingInterval:    defaultPollingInterval,
-}
-
 func WaitMined(
 	ctx context.Context,
 	ec *ethclient.Client,
@@ -68,7 +54,7 @@ func waitMined(
 	if ec == nil {
 		return nil, fmt.Errorf("nil ethclient")
 	}
-	txopts := defaultWaitMinedOptions
+	txopts := defaultTxOptions
 	for _, o := range opts {
 		o.apply(&txopts)
 	}

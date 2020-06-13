@@ -47,7 +47,7 @@ func NewTransactor(
 	if err != nil {
 		return nil, err
 	}
-	signer, err := NewSigner(privKey, WithChainId(chainId))
+	signer, err := NewSigner(privKey, chainId)
 	if err != nil {
 		return nil, err
 	}

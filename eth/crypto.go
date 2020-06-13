@@ -32,25 +32,25 @@ type CelerSigner struct {
 	chainId *big.Int
 }
 
-func NewSigner(privateKey string, opts ...TxOption) (*CelerSigner, error) {
-	txopts := &txOptions{}
-	for _, o := range opts {
-		o.apply(txopts)
-	}
+// Create a new Signer object from the private key
+// chainId could be nil if the signer is expected to only call SignEthMessage func
+func NewSigner(privateKey string, chainId *big.Int) (*CelerSigner, error) {
 	key, err := crypto.HexToECDSA(privateKey)
 	if err != nil {
 		return nil, err
 	}
-	c := &CelerSigner{key: key, chainId: txopts.chainId}
+	c := &CelerSigner{key: key, chainId: chainId}
 	return c, nil
 }
 
-func NewSignerFromKeystore(keyjson, passphrase string, opts ...TxOption) (*CelerSigner, error) {
+// Create a new Signer object from the keystore json and passphrase
+// chainId could be nil if the signer is expected to only call SignEthMessage func
+func NewSignerFromKeystore(keyjson, passphrase string, chainId *big.Int) (*CelerSigner, error) {
 	_, privkey, err := GetAddrPrivKeyFromKeystore(keyjson, passphrase)
 	if err != nil {
 		return nil, err
 	}
-	return NewSigner(privkey, opts...)
+	return NewSigner(privkey, chainId)
 }
 
 // input data: a byte array of raw message to be signed
