@@ -31,21 +31,11 @@ type Transactor struct {
 	lock    sync.Mutex
 }
 
-type TxConfig struct {
-	EthValue   *big.Int
-	BlockDelay uint64
-	GasLimit   uint64
-	QuickCatch bool
-	Urgent     bool
-	Retry      bool
-}
-
 type TxMethod func(transactor bind.ContractTransactor, opts *bind.TransactOpts) (*types.Transaction, error)
 
 type TransactionStateHandler struct {
-	OnMined   func(receipt *types.Receipt)
-	OnDropped func(tx *types.Transaction)
-	OnTimeout func(tx *types.Transaction)
+	OnMined func(receipt *types.Receipt)
+	OnError func(tx *types.Transaction, err error)
 }
 
 func NewTransactor(
@@ -91,12 +81,17 @@ func (t *Transactor) TransactWaitMined(
 	method TxMethod,
 	opts ...TxOption) (*types.Receipt, error) {
 	receiptChan := make(chan *types.Receipt, 1)
-	_, err := t.transact(newTxWaitMinedHandler(description, receiptChan), method, opts...)
+	errChan := make(chan error, 1)
+	_, err := t.transact(newTxWaitMinedHandler(description, receiptChan, errChan), method, opts...)
 	if err != nil {
 		return nil, err
 	}
-	res := <-receiptChan
-	return res, nil
+	select {
+	case res := <-receiptChan:
+		return res, nil
+	case err := <-errChan:
+		return nil, err
+	}
 }
 
 func (t *Transactor) transact(
@@ -168,11 +163,8 @@ func (t *Transactor) transact(
 					log.Debugf("Waiting for tx %s to be mined", txHash)
 					receipt, err := WaitMined(context.Background(), client, tx, opts...)
 					if err != nil {
-						log.Error(err)
-						if errors.Is(err, ErrTxDropped) && handler.OnDropped != nil {
-							handler.OnDropped(tx)
-						} else if errors.Is(err, ErrTxTimeout) && handler.OnTimeout != nil {
-							handler.OnTimeout(tx)
+						if handler.OnError != nil {
+							handler.OnError(tx, err)
 						}
 						return
 					}
@@ -229,7 +221,7 @@ func (t *Transactor) newTransactOpts() *bind.TransactOpts {
 }
 
 func newTxWaitMinedHandler(
-	description string, receiptChan chan *types.Receipt) *TransactionStateHandler {
+	description string, receiptChan chan *types.Receipt, errChan chan error) *TransactionStateHandler {
 	return &TransactionStateHandler{
 		OnMined: func(receipt *types.Receipt) {
 			if receipt.Status == types.ReceiptStatusSuccessful {
@@ -238,6 +230,10 @@ func newTxWaitMinedHandler(
 				log.Errorf("%s transaction %x failed", description, receipt.TxHash)
 			}
 			receiptChan <- receipt
+		},
+		OnError: func(tx *types.Transaction, err error) {
+			log.Errorf("%s transaction %x err: %s", description, tx.Hash(), err)
+			errChan <- err
 		},
 	}
 }
