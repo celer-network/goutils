@@ -18,7 +18,6 @@ type txOptions struct {
 	pollingInterval    time.Duration // waitMined
 	blockDelay         uint64        // waitMined
 	chainId            *big.Int      // signer
-
 }
 
 type TxOption interface {
