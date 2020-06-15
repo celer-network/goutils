@@ -27,6 +27,7 @@ const (
 	defaultTxQueryRetryInterval = 10 * time.Second
 )
 
+// do not return pointer here as defaultTxOptions is always deep copied when used
 func defaultTxOptions() txOptions {
 	return txOptions{
 		pollingInterval:    defaultPollingInterval,
