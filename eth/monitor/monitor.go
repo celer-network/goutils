@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/celer-network/goutils/eth"
 	"github.com/celer-network/goutils/eth/watcher"
 	"github.com/celer-network/goutils/log"
 	"github.com/ethereum/go-ethereum/common"
@@ -71,8 +70,9 @@ type Config struct {
 	EventName            string
 	Contract             Contract
 	StartBlock, EndBlock *big.Int
-	QuickCatch, Reset    bool
+	Reset                bool
 	CheckInterval        uint64
+	BlockDelay           uint64 // if zero, use service.blockDelay by default
 }
 
 // Event is the metadata for an event
@@ -230,8 +230,8 @@ func (s *Service) Monitor(cfg *Config, callback func(CallbackID, types.Log)) (Ca
 		CheckInterval: cfg.CheckInterval,
 		Callback:      callback,
 	}
-	if cfg.QuickCatch {
-		eventToListen.BlockDelay = eth.GetQuickCatchBlockDelay()
+	if cfg.BlockDelay != 0 {
+		eventToListen.BlockDelay = cfg.BlockDelay
 	}
 	if eventToListen.CheckInterval == 0 {
 		eventToListen.CheckInterval = defaultCheckInterval

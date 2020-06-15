@@ -28,81 +28,95 @@ type Transactor struct {
 	client  *ethclient.Client
 	nonce   uint64
 	sentTx  bool
+	dopts   txOptions // default transactor tx options
 	lock    sync.Mutex
-}
-
-type TxConfig struct {
-	EthValue   *big.Int
-	GasLimit   uint64
-	QuickCatch bool
-	Urgent     bool
-	Retry      bool
 }
 
 type TxMethod func(transactor bind.ContractTransactor, opts *bind.TransactOpts) (*types.Transaction, error)
 
 type TransactionStateHandler struct {
-	OnMined   func(receipt *types.Receipt)
-	OnDropped func(tx *types.Transaction)
-	OnTimeout func(tx *types.Transaction)
+	OnMined func(receipt *types.Receipt)
+	OnError func(tx *types.Transaction, err error)
 }
 
 func NewTransactor(
 	keyjson string,
 	passphrase string,
-	client *ethclient.Client) (*Transactor, error) {
+	client *ethclient.Client,
+	chainId *big.Int,
+	opts ...TxOption) (*Transactor, error) {
 	address, privKey, err := GetAddrPrivKeyFromKeystore(keyjson, passphrase)
 	if err != nil {
 		return nil, err
 	}
-	signer, err := NewSigner(privKey)
+	signer, err := NewSigner(privKey, chainId)
 	if err != nil {
 		return nil, err
+	}
+	txopts := defaultTxOptions()
+	for _, o := range opts {
+		o.apply(&txopts)
 	}
 	return &Transactor{
 		address: address,
 		signer:  signer,
 		client:  client,
+		dopts:   txopts,
 	}, nil
 }
 
 func NewTransactorByExternalSigner(
 	address common.Address,
 	signer Signer,
-	client *ethclient.Client) *Transactor {
+	client *ethclient.Client,
+	opts ...TxOption) *Transactor {
+	txopts := defaultTxOptions()
+	for _, o := range opts {
+		o.apply(&txopts)
+	}
 	return &Transactor{
 		address: address,
 		signer:  signer,
 		client:  client,
+		dopts:   txopts,
 	}
 }
 
 func (t *Transactor) Transact(
 	handler *TransactionStateHandler,
-	txconfig *TxConfig,
-	method TxMethod) (*types.Transaction, error) {
-	return t.transact(handler, txconfig, method)
+	method TxMethod,
+	opts ...TxOption) (*types.Transaction, error) {
+	return t.transact(handler, method, opts...)
 }
 
 func (t *Transactor) TransactWaitMined(
 	description string,
-	txconfig *TxConfig,
-	method TxMethod) (*types.Receipt, error) {
+	method TxMethod,
+	opts ...TxOption) (*types.Receipt, error) {
 	receiptChan := make(chan *types.Receipt, 1)
-	_, err := t.transact(newTxWaitMinedHandler(description, receiptChan), txconfig, method)
+	errChan := make(chan error, 1)
+	_, err := t.transact(newTxWaitMinedHandler(description, receiptChan, errChan), method, opts...)
 	if err != nil {
 		return nil, err
 	}
-	res := <-receiptChan
-	return res, nil
+	select {
+	case res := <-receiptChan:
+		return res, nil
+	case err := <-errChan:
+		return nil, err
+	}
 }
 
 func (t *Transactor) transact(
 	handler *TransactionStateHandler,
-	txconfig *TxConfig,
-	method TxMethod) (*types.Transaction, error) {
+	method TxMethod,
+	opts ...TxOption) (*types.Transaction, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
+	txopts := t.dopts
+	for _, o := range opts {
+		o.apply(&txopts)
+	}
 	signer := t.newTransactOpts()
 	client := t.client
 	suggestedPrice, err := client.SuggestGasPrice(context.Background())
@@ -110,31 +124,27 @@ func (t *Transactor) transact(
 		return nil, err
 	}
 	signer.GasPrice = suggestedPrice
-	minGas := GetMinGasGwei()
-	maxGas := GetMaxGasGwei()
-	if minGas > 0 { // gas can't be lower than minGas
-		minPrice := new(big.Int).SetUint64(minGas * 1e9) // 1e9 is 1G
+	if txopts.addGasGwei > 0 { // add gas price to the suggested value to speed up transactions
+		addPrice := new(big.Int).SetUint64(txopts.addGasGwei * 1e9) // 1e9 is 1G
+		signer.GasPrice = signer.GasPrice.Add(signer.GasPrice, addPrice)
+	}
+	if txopts.minGasGwei > 0 { // gas can't be lower than minGas
+		minPrice := new(big.Int).SetUint64(txopts.minGasGwei * 1e9)
 		// minPrice is larger than suggested, use minPrice
-		if minPrice.Cmp(suggestedPrice) > 0 {
+		if minPrice.Cmp(signer.GasPrice) > 0 {
 			signer.GasPrice = minPrice
-		} else {
-			signer.GasPrice = suggestedPrice
 		}
 	}
-	if maxGas > 0 { // maxGas 0 means no cap on gas price, otherwise won't set bigger than it
-		capPrice := new(big.Int).SetUint64(maxGas * 1e9) // 1e9 is 1G
+	if txopts.maxGasGwei > 0 { // maxGas 0 means no cap on gas price, otherwise won't set bigger than it
+		maxPrice := new(big.Int).SetUint64(txopts.maxGasGwei * 1e9)
 		// GasPrice is larger than allowed cap, set to cap
-		if capPrice.Cmp(signer.GasPrice) < 0 {
-			log.Warnf("suggested gas price %s larger than cap %s, set to cap", signer.GasPrice, capPrice)
-			signer.GasPrice = capPrice
+		if maxPrice.Cmp(signer.GasPrice) < 0 {
+			log.Warnf("suggested gas price %s larger than cap %s, set to cap", signer.GasPrice, maxPrice)
+			signer.GasPrice = maxPrice
 		}
 	}
-	signer.GasLimit = txconfig.GasLimit
-	if txconfig.EthValue != nil {
-		signer.Value = txconfig.EthValue
-	} else {
-		signer.Value = big.NewInt(0)
-	}
+	signer.GasLimit = txopts.gasLimit
+	signer.Value = txopts.ethValue
 	pendingNonce, err := t.client.PendingNonceAt(context.Background(), t.address)
 	if err != nil {
 		return nil, err
@@ -164,18 +174,16 @@ func (t *Transactor) transact(
 				go func() {
 					txHash := tx.Hash().Hex()
 					log.Debugf("Waiting for tx %s to be mined", txHash)
-					blockDelay := GetBlockDelay()
-					quickCatchBlockDelay := GetQuickCatchBlockDelay()
-					if txconfig.QuickCatch && quickCatchBlockDelay < blockDelay {
-						blockDelay = quickCatchBlockDelay
-					}
-					receipt, err := WaitMined(context.Background(), client, tx, blockDelay, GetBlockPollingIntervalSec())
+					receipt, err := WaitMined(
+						context.Background(), client, tx,
+						WithBlockDelay(txopts.blockDelay),
+						WithPollingInterval(txopts.pollingInterval),
+						WithTimeout(txopts.timeout),
+						WithQueryTimeout(txopts.queryTimeout),
+						WithQueryRetryInterval(txopts.queryRetryInterval))
 					if err != nil {
-						log.Error(err)
-						if errors.Is(err, ErrTxDropped) && handler.OnDropped != nil {
-							handler.OnDropped(tx)
-						} else if errors.Is(err, ErrTxTimeout) && handler.OnTimeout != nil {
-							handler.OnTimeout(tx)
+						if handler.OnError != nil {
+							handler.OnError(tx, err)
 						}
 						return
 					}
@@ -199,8 +207,18 @@ func (t *Transactor) Address() common.Address {
 	return t.address
 }
 
-func (t *Transactor) WaitMined(txHash string) (*types.Receipt, error) {
-	return WaitMinedWithTxHash(context.Background(), t.client, txHash, GetBlockDelay(), GetBlockPollingIntervalSec())
+func (t *Transactor) WaitMined(txHash string, opts ...TxOption) (*types.Receipt, error) {
+	txopts := t.dopts
+	for _, o := range opts {
+		o.apply(&txopts)
+	}
+	return WaitMinedWithTxHash(
+		context.Background(), t.client, txHash,
+		WithBlockDelay(txopts.blockDelay),
+		WithPollingInterval(txopts.pollingInterval),
+		WithTimeout(txopts.timeout),
+		WithQueryTimeout(txopts.queryTimeout),
+		WithQueryRetryInterval(txopts.queryRetryInterval))
 }
 
 func (t *Transactor) newTransactOpts() *bind.TransactOpts {
@@ -232,7 +250,7 @@ func (t *Transactor) newTransactOpts() *bind.TransactOpts {
 }
 
 func newTxWaitMinedHandler(
-	description string, receiptChan chan *types.Receipt) *TransactionStateHandler {
+	description string, receiptChan chan *types.Receipt, errChan chan error) *TransactionStateHandler {
 	return &TransactionStateHandler{
 		OnMined: func(receipt *types.Receipt) {
 			if receipt.Status == types.ReceiptStatusSuccessful {
@@ -241,6 +259,10 @@ func newTxWaitMinedHandler(
 				log.Errorf("%s transaction %x failed", description, receipt.TxHash)
 			}
 			receiptChan <- receipt
+		},
+		OnError: func(tx *types.Transaction, err error) {
+			log.Errorf("%s transaction %x err: %s", description, tx.Hash(), err)
+			errChan <- err
 		},
 	}
 }
