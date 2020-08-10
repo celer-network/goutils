@@ -235,7 +235,7 @@ func (ws *WatchService) MakeFilterQuery(
 
 	q.FromBlock = startBlock
 	q.Addresses = []common.Address{addr}
-	q.Topics = [][]common.Hash{{ev.ID()}}
+	q.Topics = [][]common.Hash{{ev.ID}}
 	return q, nil
 }
 
