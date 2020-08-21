@@ -91,11 +91,12 @@ func makeKafRecv(kafkaUrl, component, topic string, cb KafRecvFunc, mkReader Kaf
 	topic = strings.ToLower(topic)
 
 	config := &kafka.ReaderConfig{
-		Brokers:  strings.Split(kafkaUrl, ","),
-		Topic:    topic,
-		GroupID:  component + "-" + topic,
-		MinBytes: 100,  // 100 bytes
-		MaxBytes: 10e6, // 10MB
+		Brokers:     strings.Split(kafkaUrl, ","),
+		Topic:       topic,
+		GroupID:     component + "-" + topic,
+		MinBytes:    100,  // 100 bytes
+		MaxBytes:    10e6, // 10MB
+		StartOffset: kafka.LastOffset,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
