@@ -84,6 +84,19 @@ func NewKafRecv(kafkaUrl, component, topic string, cb KafRecvFunc) *KafRecv {
 	return makeKafRecv(kafkaUrl, component, topic, cb, mkReader)
 }
 
+// Create a KafRecv and receive from LATEST/new messages.
+// This is different from NewKafRecv which receives from beginning of msgs
+func NewKafRecvFromLatest(kafkaUrl, component, topic string, cb KafRecvFunc) *KafRecv {
+	// Constructor of real internal Kafka readers.
+	mkReader := func(config *kafka.ReaderConfig) KafReader {
+		// default StartOffset is FirstOffset
+		config.StartOffset = kafka.LastOffset
+		return kafka.NewReader(*config)
+	}
+
+	return makeKafRecv(kafkaUrl, component, topic, cb, mkReader)
+}
+
 // Internal helper to create a KafRecv with a specified constructor of a Kafka reader.
 // It allows unittests to be written passing it a constructor of mock Kafka readers.
 func makeKafRecv(kafkaUrl, component, topic string, cb KafRecvFunc, mkReader KafReaderFunc) *KafRecv {
@@ -91,12 +104,11 @@ func makeKafRecv(kafkaUrl, component, topic string, cb KafRecvFunc, mkReader Kaf
 	topic = strings.ToLower(topic)
 
 	config := &kafka.ReaderConfig{
-		Brokers:     strings.Split(kafkaUrl, ","),
-		Topic:       topic,
-		GroupID:     component + "-" + topic,
-		MinBytes:    100,  // 100 bytes
-		MaxBytes:    10e6, // 10MB
-		StartOffset: kafka.LastOffset,
+		Brokers:  strings.Split(kafkaUrl, ","),
+		Topic:    topic,
+		GroupID:  component + "-" + topic,
+		MinBytes: 100,  // 100 bytes
+		MaxBytes: 10e6, // 10MB
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
