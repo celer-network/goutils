@@ -5,6 +5,7 @@ package eth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"strings"
 	"sync"
@@ -121,7 +122,7 @@ func (t *Transactor) transact(
 	client := t.client
 	suggestedPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("SuggestGasPrice err: %w", err)
 	}
 	signer.GasPrice = suggestedPrice
 	if txopts.addGasGwei > 0 { // add gas price to the suggested value to speed up transactions
@@ -147,7 +148,7 @@ func (t *Transactor) transact(
 	signer.Value = txopts.ethValue
 	pendingNonce, err := t.client.PendingNonceAt(context.Background(), t.address)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("PendingNonceAt err: %w", err)
 	}
 	if pendingNonce > t.nonce || !t.sentTx {
 		t.nonce = pendingNonce
@@ -166,7 +167,7 @@ func (t *Transactor) transact(
 				strings.Contains(errStr, parityErrIncrementNonce) {
 				t.nonce++
 			} else {
-				return nil, err
+				return nil, fmt.Errorf("TxMethod err: %w", err)
 			}
 		} else {
 			t.sentTx = true
