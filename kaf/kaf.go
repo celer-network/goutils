@@ -219,6 +219,7 @@ func (kr *KafRecv) fetchMessage() (*kafka.Message, error) {
 		log.Warnf("kafka reader (%s) fetch error -- retry: %v", kr.topic, err)
 		delay = sleepBackoff(delay)
 		kr.refresh()
+		log.Warnf("kafka reader (%s) fetch refresh done", kr.topic)
 	}
 }
 
@@ -244,6 +245,7 @@ func (kr *KafRecv) commitMessage(msg *kafka.Message) error {
 		log.Warnf("kafka reader (%s) commit error -- retry: %v", kr.topic, err)
 		delay = sleepBackoff(delay)
 		kr.refresh()
+		log.Warnf("kafka reader (%s) commit refresh done", kr.topic)
 	}
 }
 
@@ -376,6 +378,7 @@ func (ks *KafSend) write(msg *kafka.Message) error {
 		log.Warnf("kafka writer (%s): %s: error -- retry: %v", ks.topic, string(msg.Key), err)
 		delay = sleepBackoff(delay)
 		ks.refresh()
+		log.Warnf("kafka writer (%s): refresh done", ks.topic)
 	}
 }
 
