@@ -156,6 +156,7 @@ func (kr *KafRecv) handleRecvMessages() {
 
 		log.Debugln(logHdr, "p:", m.Partition, ", o:", m.Offset, ", t:", m.Time)
 		kr.cb(m.Key, m.Value)
+		log.Debugln(logHdr, "before commitMessage")
 		kr.commitMessage(m)
 	}
 }
@@ -170,6 +171,7 @@ func (kr *KafRecv) getReader() (KafReader, error) {
 	}
 	if kr.reader == nil {
 		kr.reader = kr.mkReader(kr.config)
+		log.Debugln("getReader:", kr.topic, ": new reader created")
 	}
 	return kr.reader, nil
 }
@@ -179,9 +181,10 @@ func (kr *KafRecv) refresh() {
 	kr.mu.Lock()
 	defer kr.mu.Unlock()
 
+	log.Debugln("refresh:", kr.topic, ": close old reader, create new one")
 	if !kr.closed {
-		if kr.reader != nil {
-			kr.reader.Close()
+		if r := kr.reader; r != nil {
+			go r.Close() // "go" in case this hangs
 		}
 		kr.reader = kr.mkReader(kr.config)
 	}
@@ -216,7 +219,7 @@ func (kr *KafRecv) fetchMessage() (*kafka.Message, error) {
 			return nil, kr.ctx.Err() // closed by app
 		}
 
-		log.Warnf("kafka reader (%s) fetch error -- retry: %v", kr.topic, err)
+		log.Warnf("kafka reader (%s) fetch error -- retry in %d sec: %v", kr.topic, delay, err)
 		delay = sleepBackoff(delay)
 		kr.refresh()
 		log.Warnf("kafka reader (%s) fetch refresh done", kr.topic)
@@ -242,7 +245,7 @@ func (kr *KafRecv) commitMessage(msg *kafka.Message) error {
 			return kr.ctx.Err() // closed by app
 		}
 
-		log.Warnf("kafka reader (%s) commit error -- retry: %v", kr.topic, err)
+		log.Warnf("kafka reader (%s) commit error -- retry in %d sec: %v", kr.topic, delay, err)
 		delay = sleepBackoff(delay)
 		kr.refresh()
 		log.Warnf("kafka reader (%s) commit refresh done", kr.topic)
@@ -339,6 +342,7 @@ func (ks *KafSend) getWriter() (KafWriter, error) {
 	}
 	if ks.writer == nil {
 		ks.writer = ks.mkWriter(ks.config)
+		log.Debugln("getWriter:", ks.topic, ": new writer created")
 	}
 	return ks.writer, nil
 }
@@ -348,9 +352,10 @@ func (ks *KafSend) refresh() {
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
 
+	log.Debugln("refresh:", ks.topic, ": close old writer, create new one")
 	if !ks.closed {
-		if ks.writer != nil {
-			ks.writer.Close()
+		if w := ks.writer; w != nil {
+			go w.Close() // "go" in case this hangs
 		}
 		ks.writer = ks.mkWriter(ks.config)
 	}
@@ -367,6 +372,7 @@ func (ks *KafSend) write(msg *kafka.Message) error {
 			return err // closed by app
 		}
 
+		log.Debugf("kafka writer (%s): %s: writing message to broker", ks.topic, string(msg.Key))
 		err = w.WriteMessages(ks.ctx, *msg)
 		if err == nil {
 			return nil // success
@@ -375,7 +381,7 @@ func (ks *KafSend) write(msg *kafka.Message) error {
 			return ks.ctx.Err() // closed by app
 		}
 
-		log.Warnf("kafka writer (%s): %s: error -- retry: %v", ks.topic, string(msg.Key), err)
+		log.Warnf("kafka writer (%s): %s: error -- retry in %d sec: %v", ks.topic, string(msg.Key), delay, err)
 		delay = sleepBackoff(delay)
 		ks.refresh()
 		log.Warnf("kafka writer (%s): refresh done", ks.topic)
