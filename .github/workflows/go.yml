@@ -26,7 +26,6 @@ jobs:
         go build github.com/celer-network/goutils/eth/monitor
         go build github.com/celer-network/goutils/eth/watcher
         go build github.com/celer-network/goutils/log
-        go build github.com/celer-network/goutils/jsonpbhex
         go build github.com/celer-network/goutils/lrucache
         go build github.com/celer-network/goutils/sqldb
         go build github.com/celer-network/goutils/kaf
