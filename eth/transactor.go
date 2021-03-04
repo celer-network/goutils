@@ -227,7 +227,6 @@ func (t *Transactor) newTransactOpts() *bind.TransactOpts {
 		From: t.address,
 		// Ignore the passed in Signer to enforce EIP-155
 		Signer: func(
-			signer types.Signer,
 			address common.Address,
 			tx *types.Transaction) (*types.Transaction, error) {
 			if address != t.address {
