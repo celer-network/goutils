@@ -150,14 +150,15 @@ func (t *Transactor) transact(
 	if err != nil {
 		return nil, fmt.Errorf("PendingNonceAt err: %w", err)
 	}
-	if pendingNonce > t.nonce || !t.sentTx {
-		t.nonce = pendingNonce
+	nonce := t.nonce
+	if pendingNonce > nonce || !t.sentTx {
+		nonce = pendingNonce
 	} else {
-		t.nonce++
+		nonce++
 	}
 	for {
 		nonceInt := big.NewInt(0)
-		nonceInt.SetUint64(t.nonce)
+		nonceInt.SetUint64(nonce)
 		signer.Nonce = nonceInt
 		tx, err := method(client, signer)
 		if err != nil {
@@ -165,7 +166,7 @@ func (t *Transactor) transact(
 			if errStr == core.ErrNonceTooLow.Error() ||
 				errStr == core.ErrReplaceUnderpriced.Error() ||
 				strings.Contains(errStr, parityErrIncrementNonce) {
-				t.nonce++
+				nonce++
 			} else {
 				return nil, fmt.Errorf("TxMethod err: %w", err)
 			}
@@ -195,6 +196,7 @@ func (t *Transactor) transact(
 					}
 				}()
 			}
+			t.nonce = nonce
 			return tx, nil
 		}
 	}
