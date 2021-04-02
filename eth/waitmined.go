@@ -90,7 +90,7 @@ func waitTxConfirmed(
 	var pending bool
 	// wait tx to be mined
 	for {
-		if tx != nil {
+		if opts.dropDetection && tx != nil {
 			nonce, err = currentNonce(ctx, ec, txSender, opts.queryTimeout, opts.queryRetryInterval)
 			if err != nil {
 				return nil, fmt.Errorf("tx %x NonceAt err: %w", txHash, err)
@@ -104,7 +104,7 @@ func waitTxConfirmed(
 			}
 			break
 		} else if err == ethereum.NotFound || err == ErrMissingField {
-			if tx != nil {
+			if opts.dropDetection && tx != nil {
 				// tx is dropped if the account nonce is larger than the unmined tx nonce
 				if tx.Nonce() < nonce {
 					return nil, fmt.Errorf("tx %x err: %w", txHash, ErrTxDropped)
