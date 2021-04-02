@@ -18,6 +18,7 @@ type txOptions struct {
 	timeout            time.Duration // waitMined
 	queryTimeout       time.Duration // waitMined
 	queryRetryInterval time.Duration // waitMined
+	dropDetection      bool          // waitMined
 }
 
 const (
@@ -120,5 +121,11 @@ func WithQueryRetryInterval(t time.Duration) TxOption {
 		if t != 0 {
 			o.queryRetryInterval = t
 		}
+	})
+}
+
+func WithDropDetection(d bool) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.dropDetection = d
 	})
 }
