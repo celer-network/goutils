@@ -421,9 +421,13 @@ func (w *Watch) fetchLogEvents() {
 		w.fromBlock = maxBlock + 1
 		log.Tracef("added %d logs to queue: %s: next from %d", count, w.name, w.fromBlock)
 	} else {
-		// we didn't find any event between fromBlock and toBlock, so we can fast forward
-		// maybe we should also do this above instead of maxBlock + 1?
-		w.fromBlock = toBlock
+		// we didn't find any event between fromBlock and toBlock, so we can fast forward.
+		// add additional block delay to mitigate consistency issues from query nodes,
+		// may add another parameter later
+		fromBlock := toBlock - w.blkDelay
+		if fromBlock > w.fromBlock {
+			w.fromBlock = fromBlock
+		}
 		log.Tracef("fast forward %s fromBlock to %d", w.name, w.fromBlock)
 	}
 }
