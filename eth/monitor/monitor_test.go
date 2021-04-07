@@ -43,7 +43,16 @@ func (fc *fakeClient) HeaderByNumber(ctx context.Context, number *big.Int) (*typ
 }
 
 func (fc *fakeClient) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
-	return nil, nil
+	blkNum := <-fc.blkChan
+
+	logs := []types.Log{
+		types.Log{
+			Data:        []byte("dummy data"),
+			BlockNumber: uint64(blkNum),
+			Index:       0,
+		},
+	}
+	return logs, nil
 }
 
 func (fc *fakeClient) Close() {
@@ -218,8 +227,22 @@ func TestDeadlineQueue(t *testing.T) {
 	}
 }
 
-func event_callback(id monitor.CallbackID, ethlog types.Log) {
+func event_callback(id monitor.CallbackID, ethlog types.Log) bool {
 	log.Infof("Call event callback with log: %v\n", ethlog)
+	time.Sleep(200 * time.Millisecond)
+	return false
+}
+
+var (
+	ev_cb_recreate = true
+)
+
+func event_callback_recreate(id monitor.CallbackID, ethlog types.Log) bool {
+	log.Infof("Call event callback (recreate %t) with log: %v\n", ev_cb_recreate, ethlog)
+	time.Sleep(200 * time.Millisecond)
+	ret := ev_cb_recreate
+	ev_cb_recreate = false
+	return ret
 }
 
 func TestEvent(t *testing.T) {
@@ -257,11 +280,25 @@ func TestEvent(t *testing.T) {
 		Callback:  event_callback,
 	}
 
-	id2, err := ms.MonitorEvent(e2, false /* reser */)
+	id2, err := ms.MonitorEvent(e2, false /* reset */)
 	if err != nil {
 		t.Fatalf("register event #2 failed: %s", err)
 	}
 	log.Infof("Register callback %d\n", id2)
+
+	e3 := monitor.Event{
+		Name:      "MigrateChannelFrom",
+		Addr:      common.HexToAddress(addr),
+		RawAbi:    ledgerMigrateABI,
+		WatchName: "Event 3",
+		Callback:  event_callback_recreate,
+	}
+
+	id3, err := ms.MonitorEvent(e3, false /* reset */)
+	if err != nil {
+		t.Fatalf("register event #3 failed: %s", err)
+	}
+	log.Infof("Register callback %d\n", id3)
 
 	time.Sleep(1 * time.Second)
 	ms.RemoveEvent(id1)
