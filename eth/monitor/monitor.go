@@ -85,7 +85,7 @@ type Event struct {
 	EndBlock      *big.Int
 	BlockDelay    uint64
 	CheckInterval uint64
-	Callback      func(CallbackID, types.Log)
+	Callback      func(CallbackID, types.Log) bool
 	watch         *watcher.Watch
 }
 
@@ -212,7 +212,7 @@ func (s *Service) createEventWatch(
 	return s.watch.NewWatch(e.WatchName, q, e.BlockDelay, e.CheckInterval, reset)
 }
 
-func (s *Service) Monitor(cfg *Config, callback func(CallbackID, types.Log)) (CallbackID, error) {
+func (s *Service) Monitor(cfg *Config, callback func(CallbackID, types.Log) bool) (CallbackID, error) {
 	if !s.enabled {
 		log.Info("monitor disabled, not listening to on-chain logs")
 		return 0, nil
@@ -285,8 +285,17 @@ func (s *Service) isEventRemoved(id CallbackID) bool {
 func (s *Service) monitorEvent(e Event, id CallbackID) {
 	// WatchEvent blocks until an event is caught
 	log.Debugln("monitoring event", e.Name)
+
+	recreate := false // app callback can tell monitor to recreate the watcher
 	for {
-		eventLog, err := e.watch.Next()
+		var eventLog types.Log
+		var err error
+
+		if recreate {
+			err = fmt.Errorf("app callback wants watcher recreated")
+		} else {
+			eventLog, err = e.watch.Next()
+		}
 		if err != nil {
 			log.Errorln("monitoring event error:", e.Name, err)
 			e.watch.Close()
@@ -309,6 +318,7 @@ func (s *Service) monitorEvent(e Event, id CallbackID) {
 			e.watch = w
 			s.mu.Unlock()
 			log.Debugln("event watch recreated", e.Name)
+			recreate = false
 			continue
 		}
 
@@ -331,7 +341,18 @@ func (s *Service) monitorEvent(e Event, id CallbackID) {
 			return
 		}
 
-		e.Callback(id, eventLog)
+		// The app callback logic could detect cases where the on-chain events arriving
+		// are not as expected (e.g. missing or skipped events), which may be caused by
+		// inconsistencies between different provider nodes (e.g. Infura).  By returning
+		// a "true" recreate bool, it informs the monitor to skip the Ack() on this event
+		// and trigger the closing and recreation of the event watcher.  This could make
+		// it reconnect to a provider node having up-to-date on-chain events and recover
+		// from the inconsistency.
+		recreate = e.Callback(id, eventLog)
+		if recreate {
+			log.Warnln("app callback wants the watcher recreated:", e.Name)
+			continue
+		}
 
 		if err = e.watch.Ack(); err != nil {
 			// This is a coding bug, just exit the loop.
