@@ -175,7 +175,7 @@ func (t *Transactor) transact(
 			if handler != nil {
 				go func() {
 					txHash := tx.Hash().Hex()
-					log.Debugf("Waiting for tx %s to be mined", txHash)
+					log.Debugf("Waiting for tx %s to be mined, nonce %d", txHash, nonce)
 					receipt, err := WaitMined(
 						context.Background(), client, tx,
 						WithBlockDelay(txopts.blockDelay),
