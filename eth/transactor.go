@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Celer Network
+// Copyright 2018-2021 Celer Network
 
 package eth
 
@@ -21,6 +21,10 @@ import (
 
 const (
 	parityErrIncrementNonce = "incrementing the nonce"
+)
+
+var (
+	ErrExceedMaxGas = errors.New("suggested gas price exceeds max allowed")
 )
 
 type Transactor struct {
@@ -141,7 +145,7 @@ func (t *Transactor) transact(
 		// GasPrice is larger than allowed cap, set to cap
 		if maxPrice.Cmp(signer.GasPrice) < 0 {
 			log.Warnf("suggested gas price %s larger than cap %s, set to cap", signer.GasPrice, maxPrice)
-			signer.GasPrice = maxPrice
+			return nil, ErrExceedMaxGas
 		}
 	}
 	signer.GasLimit = txopts.gasLimit
