@@ -144,7 +144,7 @@ func (t *Transactor) transact(
 		maxPrice := new(big.Int).SetUint64(txopts.maxGasGwei * 1e9)
 		// GasPrice is larger than allowed cap, set to cap
 		if maxPrice.Cmp(signer.GasPrice) < 0 {
-			log.Warnf("suggested gas price %s larger than cap %s, set to cap", signer.GasPrice, maxPrice)
+			log.Warnf("suggested gas price %s larger than cap %s", signer.GasPrice, maxPrice)
 			return nil, ErrExceedMaxGas
 		}
 	}
