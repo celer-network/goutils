@@ -5,6 +5,7 @@
 package big
 
 import (
+	"database/sql/driver"
 	"fmt"
 	mb "math/big"
 )
@@ -46,6 +47,24 @@ func (i *Int) UnmarshalJSON(p []byte) error {
 	}
 	i.Int = *inner
 	return nil
+}
+
+// for sql scan/value, only support string without quotes
+func (i *Int) Scan(v interface{}) error {
+	s, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("%v is %T, not string", v, v)
+	}
+	inner, ok := new(mb.Int).SetString(s, 10)
+	if !ok {
+		return fmt.Errorf("invalid bigint string: %s", s)
+	}
+	i.Int = *inner
+	return nil
+}
+
+func (i Int) Value() (driver.Value, error) {
+	return i.Int.String(), nil
 }
 
 // ToInt returns a new *math/big.Int equal i.Int, to avoid unintentional change
