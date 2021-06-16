@@ -8,17 +8,18 @@ import (
 )
 
 type txOptions struct {
-	ethValue           *big.Int      // transact
-	minGasGwei         uint64        // transact
-	maxGasGwei         uint64        // transact
-	addGasGwei         uint64        // transact
-	gasLimit           uint64        // transact
-	blockDelay         uint64        // waitMined
-	pollingInterval    time.Duration // waitMined
-	timeout            time.Duration // waitMined
-	queryTimeout       time.Duration // waitMined
-	queryRetryInterval time.Duration // waitMined
-	dropDetection      bool          // waitMined
+	ethValue            *big.Int      // transact
+	minGasGwei          uint64        // transact
+	maxGasGwei          uint64        // transact
+	addGasGwei          uint64        // transact
+	gasLimit            uint64        // transact
+	addGasEstimateRatio float64       // transact
+	blockDelay          uint64        // waitMined
+	pollingInterval     time.Duration // waitMined
+	timeout             time.Duration // waitMined
+	queryTimeout        time.Duration // waitMined
+	queryRetryInterval  time.Duration // waitMined
+	dropDetection       bool          // waitMined
 }
 
 const (
@@ -83,6 +84,12 @@ func WithAddGasGwei(g uint64) TxOption {
 func WithGasLimit(l uint64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.gasLimit = l
+	})
+}
+
+func WithAddGasEstimateRatio(r float64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.addGasEstimateRatio = r
 	})
 }
 

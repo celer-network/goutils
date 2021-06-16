@@ -1,4 +1,4 @@
-// Copyright 2018-2020 Celer Network
+// Copyright 2018-2021 Celer Network
 
 package eth
 
@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/celer-network/goutils/log"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -23,8 +24,13 @@ const (
 	parityErrIncrementNonce = "incrementing the nonce"
 )
 
+var (
+	ErrExceedMaxGas = errors.New("suggested gas price exceeds max allowed")
+)
+
 type Transactor struct {
 	address common.Address
+	chainId *big.Int
 	signer  Signer
 	client  *ethclient.Client
 	nonce   uint64
@@ -60,6 +66,7 @@ func NewTransactor(
 	}
 	return &Transactor{
 		address: address,
+		chainId: chainId,
 		signer:  signer,
 		client:  client,
 		dopts:   txopts,
@@ -140,12 +147,39 @@ func (t *Transactor) transact(
 		maxPrice := new(big.Int).SetUint64(txopts.maxGasGwei * 1e9)
 		// GasPrice is larger than allowed cap, set to cap
 		if maxPrice.Cmp(signer.GasPrice) < 0 {
-			log.Warnf("suggested gas price %s larger than cap %s, set to cap", signer.GasPrice, maxPrice)
-			signer.GasPrice = maxPrice
+			log.Warnf("suggested gas price %s larger than cap %s", signer.GasPrice, maxPrice)
+			return nil, ErrExceedMaxGas
 		}
 	}
-	signer.GasLimit = txopts.gasLimit
 	signer.Value = txopts.ethValue
+	if txopts.gasLimit > 0 {
+		// use the specified limit
+		signer.GasLimit = txopts.gasLimit
+	} else if txopts.addGasEstimateRatio > 0.0 {
+		// estimate gas and increase gas limit by configured ratio
+		signer.NoSend = true
+		dryTx, err := method(client, signer)
+		if err != nil {
+			return nil, fmt.Errorf("dry-run err: %w", err)
+		}
+		signer.NoSend = false
+		typesMsg, err := dryTx.AsMessage(types.NewEIP155Signer(t.chainId))
+		if err != nil {
+			return nil, fmt.Errorf("failed to get typesMsg err: %w", err)
+		}
+		callMsg := ethereum.CallMsg{
+			From:     typesMsg.From(),
+			To:       typesMsg.To(),
+			GasPrice: typesMsg.GasPrice(),
+			Value:    typesMsg.Value(),
+			Data:     typesMsg.Data(),
+		}
+		estimatedGas, err := client.EstimateGas(context.Background(), callMsg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to estimate gas err: %w", err)
+		}
+		signer.GasLimit = uint64(float64(estimatedGas) * (1 + txopts.addGasEstimateRatio))
+	}
 	pendingNonce, err := t.client.PendingNonceAt(context.Background(), t.address)
 	if err != nil {
 		return nil, fmt.Errorf("PendingNonceAt err: %w", err)
@@ -175,7 +209,7 @@ func (t *Transactor) transact(
 			if handler != nil {
 				go func() {
 					txHash := tx.Hash().Hex()
-					log.Debugf("Waiting for tx %s to be mined", txHash)
+					log.Debugf("Waiting for tx %s to be mined, nonce %d", txHash, nonce)
 					receipt, err := WaitMined(
 						context.Background(), client, tx,
 						WithBlockDelay(txopts.blockDelay),
