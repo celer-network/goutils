@@ -225,6 +225,9 @@ func (t *Transactor) transact(
 					}
 					log.Debugf("Tx %s mined, status: %d, gas estimate: %d, gas used: %d",
 						txHash, receipt.Status, tx.Gas(), receipt.GasUsed)
+					if receipt.Status == types.ReceiptStatusFailed {
+						log.Errorf("Tx %s reverted", txHash)
+					}
 					if handler.OnMined != nil {
 						handler.OnMined(receipt)
 					}
