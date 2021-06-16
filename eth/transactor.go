@@ -156,7 +156,7 @@ func (t *Transactor) transact(
 		// use the specified limit
 		signer.GasLimit = txopts.gasLimit
 	} else if txopts.addGasEstimateRatio > 0.0 {
-		// Enable gas estimation
+		// estimate gas and increase gas limit by configured ratio
 		signer.NoSend = true
 		dryTx, err := method(client, signer)
 		if err != nil {
