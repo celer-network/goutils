@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/celer-network/goutils/log"
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -29,6 +30,7 @@ var (
 
 type Transactor struct {
 	address common.Address
+	chainId *big.Int
 	signer  Signer
 	client  *ethclient.Client
 	nonce   uint64
@@ -64,6 +66,7 @@ func NewTransactor(
 	}
 	return &Transactor{
 		address: address,
+		chainId: chainId,
 		signer:  signer,
 		client:  client,
 		dopts:   txopts,
@@ -148,8 +151,35 @@ func (t *Transactor) transact(
 			return nil, ErrExceedMaxGas
 		}
 	}
-	signer.GasLimit = txopts.gasLimit
 	signer.Value = txopts.ethValue
+	if txopts.gasLimit > 0 {
+		// use the specified limit
+		signer.GasLimit = txopts.gasLimit
+	} else if txopts.addGasEstimateRatio > 0.0 {
+		// estimate gas and increase gas limit by configured ratio
+		signer.NoSend = true
+		dryTx, err := method(client, signer)
+		if err != nil {
+			return nil, fmt.Errorf("dry-run err: %w", err)
+		}
+		signer.NoSend = false
+		typesMsg, err := dryTx.AsMessage(types.NewEIP155Signer(t.chainId))
+		if err != nil {
+			return nil, fmt.Errorf("failed to get typesMsg err: %w", err)
+		}
+		callMsg := ethereum.CallMsg{
+			From:     typesMsg.From(),
+			To:       typesMsg.To(),
+			GasPrice: typesMsg.GasPrice(),
+			Value:    typesMsg.Value(),
+			Data:     typesMsg.Data(),
+		}
+		estimatedGas, err := client.EstimateGas(context.Background(), callMsg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to estimate gas err: %w", err)
+		}
+		signer.GasLimit = uint64(float64(estimatedGas) * (1 + txopts.addGasEstimateRatio))
+	}
 	pendingNonce, err := t.client.PendingNonceAt(context.Background(), t.address)
 	if err != nil {
 		return nil, fmt.Errorf("PendingNonceAt err: %w", err)
@@ -195,6 +225,9 @@ func (t *Transactor) transact(
 					}
 					log.Debugf("Tx %s mined, status: %d, gas estimate: %d, gas used: %d",
 						txHash, receipt.Status, tx.Gas(), receipt.GasUsed)
+					if receipt.Status == types.ReceiptStatusFailed {
+						log.Errorf("Tx %s reverted", txHash)
+					}
 					if handler.OnMined != nil {
 						handler.OnMined(receipt)
 					}
