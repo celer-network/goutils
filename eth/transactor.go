@@ -152,7 +152,10 @@ func (t *Transactor) transact(
 		}
 	}
 	signer.Value = txopts.ethValue
-	if txopts.addGasEstimateRatio > 0.0 {
+	if txopts.gasLimit > 0 {
+		// use the specified limit
+		signer.GasLimit = txopts.gasLimit
+	} else if txopts.addGasEstimateRatio > 0.0 {
 		// Enable gas estimation
 		signer.NoSend = true
 		dryTx, err := method(client, signer)
@@ -176,9 +179,6 @@ func (t *Transactor) transact(
 			return nil, fmt.Errorf("failed to estimate gas err: %w", err)
 		}
 		signer.GasLimit = uint64(float64(estimatedGas) * (1 + txopts.addGasEstimateRatio))
-	} else {
-		// Just use the specified limit
-		signer.GasLimit = txopts.gasLimit
 	}
 	pendingNonce, err := t.client.PendingNonceAt(context.Background(), t.address)
 	if err != nil {
