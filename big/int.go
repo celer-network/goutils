@@ -10,6 +10,8 @@ import (
 	mb "math/big"
 )
 
+type Float = mb.Float // no need for custom Float, add here to simplify code using both big.Int and Float
+
 type Int struct {
 	mb.Int
 }
@@ -22,7 +24,7 @@ func NewInt(x int64) *Int {
 
 func New(i *mb.Int) *Int {
 	return &Int{
-		Int: *new(mb.Int).Set(i),
+		Int: *i,
 	}
 }
 
