@@ -10,8 +10,6 @@ import (
 	mb "math/big"
 )
 
-type Float = mb.Float // no need for custom Float, add here to simplify code using both big.Int and Float
-
 type Int struct {
 	mb.Int
 }
@@ -73,4 +71,15 @@ func (i Int) Value() (driver.Value, error) {
 // if read only, use i.Int directly
 func (i Int) ToInt() *mb.Int {
 	return new(mb.Int).Set(&i.Int)
+}
+
+// no need for custom Float, add here to simplify code using both big.Int and Float
+type Float = mb.Float
+
+func NewFloat(x float64) *Float {
+	return mb.NewFloat(x)
+}
+
+func ParseFloat(s string, base int, prec uint, mode mb.RoundingMode) (f *Float, b int, err error) {
+	return mb.ParseFloat(s, base, prec, mode)
 }
