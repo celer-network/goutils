@@ -67,12 +67,15 @@ func (dq *DeadlineQueue) Top() (top interface{}) {
 // CheckInterval means to check log for event every CheckInterval x WatchService.polling
 // if 0 or not set, defaultCheckInterval (1) will be used
 type Config struct {
-	EventName            string
-	Contract             Contract
+	ChainId   uint64
+	Contract  Contract
+	EventName string
+
 	StartBlock, EndBlock *big.Int
-	Reset                bool
-	CheckInterval        uint64
-	BlockDelay           uint64 // if zero, use service.blockDelay by default
+
+	Reset         bool
+	CheckInterval uint64
+	BlockDelay    uint64 // if zero, use service.blockDelay by default
 }
 
 // Event is the metadata for an event
@@ -218,7 +221,7 @@ func (s *Service) Monitor(cfg *Config, callback func(CallbackID, types.Log) bool
 		return 0, nil
 	}
 	addr := cfg.Contract.GetAddr()
-	watchName := NewEventStr(addr, cfg.EventName)
+	watchName := NewEventStr(cfg.ChainId, addr, cfg.EventName)
 	eventToListen := &Event{
 		Addr:          addr,
 		RawAbi:        cfg.Contract.GetABI(),
@@ -387,7 +390,8 @@ func (s *Service) RemoveEvent(id CallbackID) {
 	}
 }
 
-// NewEventStr generates the event using contract address and event name in format "<addr>-<name>"
-func NewEventStr(contractAddr common.Address, eventName string) string {
-	return fmt.Sprintf("%s-%s", hex.EncodeToString(contractAddr.Bytes()), eventName)
+// NewEventStr generates the event using chainID, contract address and event name in the format
+// "<chainID>-<contractAddr>-<eventName>"
+func NewEventStr(chainId uint64, contractAddr common.Address, eventName string) string {
+	return fmt.Sprintf("%d-%s-%s", chainId, hex.EncodeToString(contractAddr.Bytes()), eventName)
 }
