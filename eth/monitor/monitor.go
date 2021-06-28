@@ -391,7 +391,12 @@ func (s *Service) RemoveEvent(id CallbackID) {
 }
 
 // NewEventStr generates the event using chainID, contract address and event name in the format
-// "<chainID>-<contractAddr>-<eventName>"
+// "<chainID>-<contractAddr>-<eventName>". For backwards compatibility, If chainID is not set,
+// this generates "<contractAddr>-<eventName">.
 func NewEventStr(chainId uint64, contractAddr common.Address, eventName string) string {
-	return fmt.Sprintf("%d-%s-%s", chainId, hex.EncodeToString(contractAddr.Bytes()), eventName)
+	encodedAddr := hex.EncodeToString(contractAddr.Bytes())
+	if chainId == 0 {
+		return fmt.Sprintf("%s-%s", encodedAddr, eventName)
+	}
+	return fmt.Sprintf("%d-%s-%s", chainId, encodedAddr, eventName)
 }
