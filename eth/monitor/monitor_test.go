@@ -140,7 +140,7 @@ func watchService() (*watcher.WatchService, *fakeClient, error) {
 	dal := NewFakeDAL()
 	client := NewFakeClient()
 
-	ws := watcher.NewWatchService(client, dal, 1)
+	ws := watcher.NewWatchService(client, dal, 1, 0)
 	if ws == nil {
 		return nil, nil, fmt.Errorf("cannot create watch service")
 	}

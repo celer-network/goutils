@@ -228,7 +228,7 @@ func TestWatcher(t *testing.T) {
 	client := NewFakeClient(blkSleep, false)
 	defer client.Close()
 
-	ws := makeWatchService(client, dal, uint64(polling))
+	ws := makeWatchService(client, dal, uint64(polling), 0)
 	if ws == nil {
 		t.Fatalf("Cannot create watch service")
 	}
@@ -281,7 +281,7 @@ func TestWatcher(t *testing.T) {
 func TestBadWatcher(t *testing.T) {
 	dal := NewFakeDAL()
 
-	ws := NewWatchService(nil, dal, 1)
+	ws := NewWatchService(nil, dal, 1, 0)
 	if ws != nil {
 		ws.Close()
 		t.Errorf("Watch service did not error on NIL client")
@@ -291,19 +291,19 @@ func TestBadWatcher(t *testing.T) {
 	client := NewFakeClient(blkSleep, true)
 	defer client.Close()
 
-	ws = NewWatchService(client, nil, 1)
+	ws = NewWatchService(client, nil, 1, 0)
 	if ws != nil {
 		ws.Close()
 		t.Errorf("Watch service did not error on NIL DAL")
 	}
 
-	ws = NewWatchService(client, dal, 0)
+	ws = NewWatchService(client, dal, 0, 0)
 	if ws != nil {
 		ws.Close()
 		t.Errorf("Watch service did not error on zero polling")
 	}
 
-	ws = NewWatchService(client, dal, 5)
+	ws = NewWatchService(client, dal, 5, 0)
 	if ws == nil {
 		t.Fatalf("Cannot create watch service")
 	}
@@ -383,7 +383,7 @@ func TestWatcherRestart(t *testing.T) {
 	blkSleep := time.Duration(polling) * time.Millisecond
 	client := NewFakeClient(blkSleep, true)
 
-	ws := makeWatchService(client, dal, uint64(polling))
+	ws := makeWatchService(client, dal, uint64(polling), 0)
 
 	query := ethereum.FilterQuery{}
 	w, err := ws.NewWatch("foo", query, 2, 1, false)
@@ -401,7 +401,7 @@ func TestWatcherRestart(t *testing.T) {
 	// App restart.
 
 	client = NewFakeClient(blkSleep, true)
-	ws = makeWatchService(client, dal, uint64(polling))
+	ws = makeWatchService(client, dal, uint64(polling), 0)
 
 	w, err = ws.NewWatch("foo", query, 2, 1, false)
 	if err != nil {
@@ -417,7 +417,7 @@ func TestWatcherRestart(t *testing.T) {
 
 	// App restart, this time ignore persistence and reset the subscription.
 	client = NewFakeClient(blkSleep, true)
-	ws = makeWatchService(client, dal, uint64(polling))
+	ws = makeWatchService(client, dal, uint64(polling), 0)
 
 	w, err = ws.NewWatch("foo", query, 2, 1, true) // reset subscription
 	if err != nil {
@@ -435,7 +435,7 @@ func TestWatcherServiceClose(t *testing.T) {
 	client := NewFakeClient(blkSleep, true)
 	defer client.Close()
 
-	ws := makeWatchService(client, dal, uint64(polling))
+	ws := makeWatchService(client, dal, uint64(polling), 0)
 
 	hash := common.BigToHash(big.NewInt(404))
 	query := ethereum.FilterQuery{
@@ -465,7 +465,7 @@ func TestMakeFilterQuery(t *testing.T) {
 	client := NewFakeClient(blkSleep, true)
 	defer client.Close()
 
-	ws := NewWatchService(client, dal, 1)
+	ws := NewWatchService(client, dal, 1, 0)
 	defer ws.Close()
 
 	ledgerMigrateABI := "[{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"channelId\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"newLedgerAddr\",\"type\":\"address\"}],\"name\":\"MigrateChannelTo\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"name\":\"channelId\",\"type\":\"bytes32\"},{\"indexed\":true,\"name\":\"oldLedgerAddr\",\"type\":\"address\"}],\"name\":\"MigrateChannelFrom\",\"type\":\"event\"}]"
