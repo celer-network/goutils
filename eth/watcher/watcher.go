@@ -96,6 +96,8 @@ type WatchDAL interface {
 }
 
 // Create a watch service.
+// polling: interval (in seconds) to periodically query eth logs
+// maxBlockDelta: maximum number of blocks for each eth log query, 0 means unlimited
 func NewWatchService(client WatchClient, dal WatchDAL, polling, maxBlockDelta uint64) *WatchService {
 	// Note: the incoming polling interval is in seconds.  Purely for
 	// unit testing purposes, the internal "polling" variable is in
