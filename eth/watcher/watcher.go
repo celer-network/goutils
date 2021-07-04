@@ -45,13 +45,14 @@ type LogEventID struct {
 // to the Ethereum client and the KVStore persistence layer that
 // provides resumability of the watcher after a restart.
 type WatchService struct {
-	client  WatchClient       // Ethereum client interface
-	dal     WatchDAL          // Data access layer
-	polling uint64            // Polling interval (msec)
-	quit    chan bool         // Terminate the watch service
-	mu      sync.RWMutex      // Guards the fields that follow it.
-	blkNum  uint64            // Current on-chain block number
-	watches map[string]*Watch // Map of registered watches
+	client        WatchClient       // Ethereum client interface
+	dal           WatchDAL          // Data access layer
+	polling       uint64            // Polling interval (msec)
+	maxBlockDelta uint64            // Maximum number of blocks per query, 0 means unlimited
+	quit          chan bool         // Terminate the watch service
+	mu            sync.RWMutex      // Guards the fields that follow it.
+	blkNum        uint64            // Current on-chain block number
+	watches       map[string]*Watch // Map of registered watches
 }
 
 // Watch provides an iterator over a stream of event logs that match
@@ -95,25 +96,28 @@ type WatchDAL interface {
 }
 
 // Create a watch service.
-func NewWatchService(client WatchClient, dal WatchDAL, polling uint64) *WatchService {
+// polling: interval (in seconds) to periodically query eth logs
+// maxBlockDelta: maximum number of blocks for each eth log query, 0 means unlimited
+func NewWatchService(client WatchClient, dal WatchDAL, polling, maxBlockDelta uint64) *WatchService {
 	// Note: the incoming polling interval is in seconds.  Purely for
 	// unit testing purposes, the internal "polling" variable is in
 	// milliseconds to allow tests to set faster polling intervals.
-	return makeWatchService(client, dal, polling*1000)
+	return makeWatchService(client, dal, polling*1000, maxBlockDelta)
 }
 
 // Helper (for testing) to create a watch service with msec polling interval.
-func makeWatchService(client WatchClient, dal WatchDAL, polling uint64) *WatchService {
+func makeWatchService(client WatchClient, dal WatchDAL, polling, maxBlockDelta uint64) *WatchService {
 	if client == nil || dal == nil || polling == 0 {
 		return nil
 	}
 
 	ws := &WatchService{
-		client:  client,
-		dal:     dal,
-		polling: polling,
-		quit:    make(chan bool),
-		watches: make(map[string]*Watch),
+		client:        client,
+		dal:           dal,
+		polling:       polling,
+		maxBlockDelta: maxBlockDelta,
+		quit:          make(chan bool),
+		watches:       make(map[string]*Watch),
 	}
 
 	// Synchronously initialize the current head block number.
@@ -380,6 +384,9 @@ func (w *Watch) fetchLogEvents() {
 	defer cancel()
 
 	toBlock := blkNum - w.blkDelay
+	if w.service.maxBlockDelta > 0 && toBlock-w.fromBlock > w.service.maxBlockDelta {
+		toBlock = w.fromBlock + w.service.maxBlockDelta
+	}
 	w.query.FromBlock = new(big.Int).SetUint64(w.fromBlock)
 	w.query.ToBlock = new(big.Int).SetUint64(toBlock)
 
