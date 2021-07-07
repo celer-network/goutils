@@ -222,7 +222,7 @@ func (t *Transactor) transact(
 
 func determineGasPrice(txopts txOptions, client *ethclient.Client) (*big.Int, error) {
 	if txopts.forceGasGwei > 0 {
-		return new(big.Int).SetUint64(txopts.forceGasGwei), nil
+		return new(big.Int).SetUint64(txopts.forceGasGwei * 1e9), nil
 	}
 	gasPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
