@@ -1,12 +1,12 @@
 module github.com/celer-network/goutils
 
-go 1.13
+go 1.16
 
 require (
 	github.com/allegro/bigcache v1.2.1 // indirect
 	github.com/cespare/cp v1.1.1 // indirect
 	github.com/deckarep/golang-set v1.7.1 // indirect
-	github.com/ethereum/go-ethereum v1.10.2
+	github.com/ethereum/go-ethereum v1.10.7
 	github.com/frankban/quicktest v1.7.2 // indirect
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08 // indirect
 	github.com/go-kit/kit v0.9.0 // indirect
