@@ -61,7 +61,7 @@ func waitMined(
 	var txSender common.Address
 	if tx != nil {
 		txHash = tx.Hash()
-		msg, err := tx.AsMessage(types.NewEIP155Signer(tx.ChainId()), big.NewInt(0))
+		msg, err := tx.AsMessage(types.NewLondonSigner(tx.ChainId()), big.NewInt(0))
 		if err != nil {
 			return nil, fmt.Errorf("AsMessage err: %w", err)
 		}

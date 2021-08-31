@@ -144,7 +144,7 @@ func (t *Transactor) transact(
 			return nil, fmt.Errorf("dry-run err: %w", err)
 		}
 		signer.NoSend = false
-		typesMsg, err := dryTx.AsMessage(types.NewEIP155Signer(t.chainId), big.NewInt(0))
+		typesMsg, err := dryTx.AsMessage(types.NewLondonSigner(t.chainId), big.NewInt(0))
 		if err != nil {
 			return nil, fmt.Errorf("failed to get typesMsg err: %w", err)
 		}
