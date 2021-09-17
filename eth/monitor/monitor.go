@@ -76,6 +76,7 @@ type Config struct {
 	Reset         bool
 	CheckInterval uint64
 	BlockDelay    uint64 // if zero, use service.blockDelay by default
+	ForwardDelay  uint64 // if zero, use BlockDelay
 }
 
 // Event is the metadata for an event
@@ -87,6 +88,7 @@ type Event struct {
 	StartBlock    *big.Int
 	EndBlock      *big.Int
 	BlockDelay    uint64
+	ForwardDelay  uint64
 	CheckInterval uint64
 	Callback      func(CallbackID, types.Log) bool
 	watch         *watcher.Watch
@@ -212,7 +214,7 @@ func (s *Service) createEventWatch(
 	if e.CheckInterval == 0 {
 		e.CheckInterval = defaultCheckInterval
 	}
-	return s.watch.NewWatch(e.WatchName, q, e.BlockDelay, e.CheckInterval, reset)
+	return s.watch.NewWatch(e.WatchName, q, e.BlockDelay, e.ForwardDelay, e.CheckInterval, reset)
 }
 
 func (s *Service) Monitor(cfg *Config, callback func(CallbackID, types.Log) bool) (CallbackID, error) {
@@ -229,12 +231,16 @@ func (s *Service) Monitor(cfg *Config, callback func(CallbackID, types.Log) bool
 		WatchName:     watchName,
 		StartBlock:    cfg.StartBlock,
 		EndBlock:      cfg.EndBlock,
-		BlockDelay:    s.blockDelay,
+		BlockDelay:    cfg.BlockDelay,
+		ForwardDelay:  cfg.ForwardDelay,
 		CheckInterval: cfg.CheckInterval,
 		Callback:      callback,
 	}
-	if cfg.BlockDelay != 0 {
-		eventToListen.BlockDelay = cfg.BlockDelay
+	if eventToListen.BlockDelay == 0 {
+		eventToListen.BlockDelay = s.blockDelay
+	}
+	if eventToListen.ForwardDelay == 0 {
+		eventToListen.ForwardDelay = eventToListen.BlockDelay
 	}
 	if eventToListen.CheckInterval == 0 {
 		eventToListen.CheckInterval = defaultCheckInterval

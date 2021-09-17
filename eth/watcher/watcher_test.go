@@ -253,7 +253,7 @@ func TestWatcher(t *testing.T) {
 
 	query := ethereum.FilterQuery{}
 
-	w, err := ws.NewWatch("foo", query, 2, 1, false)
+	w, err := ws.NewWatch("foo", query, 2, 2, 1, false)
 	if err != nil {
 		t.Fatalf("Cannot create watcher: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestWatcher(t *testing.T) {
 	w.Close()
 	// test noLog case
 	client.noLog = true
-	w2, err := ws.NewWatch("foo", query, 2, 1, true) // reset fromBlock to 0
+	w2, err := ws.NewWatch("foo", query, 2, 2, 1, true) // reset fromBlock to 0
 	if w2.fromBlock != 0 {
 		t.Error("fromBlock isn't 0")
 	}
@@ -312,18 +312,18 @@ func TestBadWatcher(t *testing.T) {
 		FromBlock: big.NewInt(3),
 	}
 
-	w, err := ws.NewWatch("", query, 0, 1, false)
+	w, err := ws.NewWatch("", query, 0, 0, 1, false)
 	if err == nil {
 		w.Close()
 		t.Errorf("Watcher did not error on empty name")
 	}
 
-	w, err = ws.NewWatch("foo", query, 0, 1, false)
+	w, err = ws.NewWatch("foo", query, 0, 0, 1, false)
 	if err != nil {
 		t.Errorf("Cannot create watcher: %v", err)
 	}
 
-	w2, err := ws.NewWatch("foo", query, 0, 1, false)
+	w2, err := ws.NewWatch("foo", query, 0, 0, 1, false)
 	if err == nil {
 		w2.Close()
 		t.Errorf("Duplicate watcher did not fail")
@@ -367,7 +367,7 @@ func TestBadWatcher(t *testing.T) {
 	// A valid NewWatch() should fail after the watch service is closed.
 	ws.Close()
 
-	w, err = ws.NewWatch("bar", query, 0, 1, false)
+	w, err = ws.NewWatch("bar", query, 0, 0, 1, false)
 	if err == nil {
 		t.Errorf("Created watcher after service closed")
 		w.Close()
@@ -386,7 +386,7 @@ func TestWatcherRestart(t *testing.T) {
 	ws := makeWatchService(client, dal, uint64(polling), 0)
 
 	query := ethereum.FilterQuery{}
-	w, err := ws.NewWatch("foo", query, 2, 1, false)
+	w, err := ws.NewWatch("foo", query, 2, 2, 1, false)
 	if err != nil {
 		t.Fatalf("Cannot create watcher: %v", err)
 	}
@@ -403,7 +403,7 @@ func TestWatcherRestart(t *testing.T) {
 	client = NewFakeClient(blkSleep, true)
 	ws = makeWatchService(client, dal, uint64(polling), 0)
 
-	w, err = ws.NewWatch("foo", query, 2, 1, false)
+	w, err = ws.NewWatch("foo", query, 2, 2, 1, false)
 	if err != nil {
 		t.Fatalf("Cannot create watcher: %v", err)
 	}
@@ -419,7 +419,7 @@ func TestWatcherRestart(t *testing.T) {
 	client = NewFakeClient(blkSleep, true)
 	ws = makeWatchService(client, dal, uint64(polling), 0)
 
-	w, err = ws.NewWatch("foo", query, 2, 1, true) // reset subscription
+	w, err = ws.NewWatch("foo", query, 2, 2, 1, true) // reset subscription
 	if err != nil {
 		t.Fatalf("Cannot create watcher: %v", err)
 	}
@@ -441,7 +441,7 @@ func TestWatcherServiceClose(t *testing.T) {
 	query := ethereum.FilterQuery{
 		BlockHash: &hash,
 	}
-	w, _ := ws.NewWatch("foo", query, 2, 1, false)
+	w, _ := ws.NewWatch("foo", query, 2, 2, 1, false)
 
 	go func() {
 		// Block reading the next event log.
