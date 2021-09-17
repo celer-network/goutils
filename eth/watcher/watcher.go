@@ -70,6 +70,7 @@ type Watch struct {
 	ackID         LogEventID           // ID of log event pending an ACK
 	lastID        *LogEventID          // ID of log event for resuming (or nil)
 	blkDelay      uint64               // Log event delay in number of blocks
+	fwdDelay      uint64               // Block delay when fast forward
 	checkInterval uint64               // Check event every checkInterval * service.polling
 	fromBlock     uint64               // Start a fetch from this block number
 	query         ethereum.FilterQuery // On-chain event log query
@@ -251,7 +252,7 @@ func (ws *WatchService) MakeFilterQuery(
 // If "reset" is enabled, the watcher ignores the previously stored
 // position in the subscription which resets the stream to its start.
 func (ws *WatchService) NewWatch(
-	name string, query ethereum.FilterQuery, blkDelay, checkInterval uint64, reset bool) (*Watch, error) {
+	name string, query ethereum.FilterQuery, blkDelay, fwdDelay, checkInterval uint64, reset bool) (*Watch, error) {
 
 	if name == "" {
 		return nil, fmt.Errorf("watch name not specified")
@@ -261,6 +262,7 @@ func (ws *WatchService) NewWatch(
 		name:          name,
 		service:       ws,
 		blkDelay:      blkDelay,
+		fwdDelay:      fwdDelay,
 		checkInterval: checkInterval,
 		query:         query,
 		logQueue:      list.New(),
@@ -429,9 +431,8 @@ func (w *Watch) fetchLogEvents() {
 		log.Tracef("added %d logs to queue: %s: next from %d", count, w.name, w.fromBlock)
 	} else {
 		// we didn't find any event between fromBlock and toBlock, so we can fast forward.
-		// add additional block delay to mitigate consistency issues from query nodes,
-		// may add another parameter later
-		fromBlock := toBlock - w.blkDelay
+		// add additional block delay to mitigate consistency issues from query nodes
+		fromBlock := toBlock - w.fwdDelay
 		if fromBlock > w.fromBlock {
 			w.fromBlock = fromBlock
 		}
