@@ -258,6 +258,10 @@ func (ws *WatchService) NewWatch(
 		return nil, fmt.Errorf("watch name not specified")
 	}
 
+	if ws.maxBlockDelta > 0 && ws.maxBlockDelta <= fwdDelay {
+		return nil, fmt.Errorf("maxBlockDelta %d should larger than fwdDelay %d", ws.maxBlockDelta, fwdDelay)
+	}
+
 	w := &Watch{
 		name:          name,
 		service:       ws,
@@ -431,8 +435,11 @@ func (w *Watch) fetchLogEvents() {
 		log.Tracef("added %d logs to queue: %s: next from %d", count, w.name, w.fromBlock)
 	} else {
 		// we didn't find any event between fromBlock and toBlock, so we can fast forward.
-		// add additional block delay to mitigate consistency issues from query nodes
-		fromBlock := toBlock - w.fwdDelay
+		fromBlock := toBlock
+		if fromBlock+w.fwdDelay+w.blkDelay >= blkNum {
+			// add additional block delay to mitigate consistency issues from query nodes
+			fromBlock = fromBlock - w.fwdDelay
+		}
 		if fromBlock > w.fromBlock {
 			w.fromBlock = fromBlock
 		}
