@@ -202,6 +202,14 @@ func (t *Transactor) transact(
 						if handler.OnError != nil {
 							handler.OnError(tx, err)
 						}
+						if errors.Is(err, ethereum.NotFound) && pendingNonce > 0 {
+							// reset transactor nonce to pending nonce
+							// this means pending txs after this will probably fail
+							t.lock.Lock()
+							t.nonce = pendingNonce - 1
+							log.Warnln("Reset transactor nonce to", t.nonce)
+							t.lock.Unlock()
+						}
 						return
 					}
 					log.Debugf("Tx %s mined, status: %d, gas estimate: %d, gas used: %d",
