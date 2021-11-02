@@ -16,19 +16,30 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-// impl Signer
+// from go-ethereum crypto.go
+var (
+	secp256k1N, _  = new(big.Int).SetString("fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141", 16)
+	secp256k1halfN = new(big.Int).Div(secp256k1N, big.NewInt(2))
+)
+
+// impl Signer interface
 type KmsSigner struct {
+	Addr     common.Address
 	chainId  *big.Int
 	keyAlias *string
 	kms      *kms.KMS
-	Addr     common.Address
 }
 
+// region and keyAlias must be valid, eg. us-west-1 alias/mytestkey
+// if awsKey, awsSec are empty string, will use aws sdk auto search
 func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*KmsSigner, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Credentials: credentials.NewStaticCredentials(awsKey, awsSec, ""),
-		Region:      aws.String(region)},
-	)
+	cfg := &aws.Config{
+		Region: aws.String(region),
+	}
+	if awsKey != "" && awsSec != "" {
+		cfg.Credentials = credentials.NewStaticCredentials(awsKey, awsSec, "")
+	}
+	sess, err := session.NewSession(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("NewSession err: %w", err)
 	}
@@ -48,10 +59,10 @@ func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*K
 	// see PubkeyToAddress https://github.com/ethereum/go-ethereum/blob/master/crypto/crypto.go#L276
 	addr := common.BytesToAddress(crypto.Keccak256(pub.PubKey.Bytes[1:])[12:])
 	return &KmsSigner{
+		Addr:     addr,
 		chainId:  new(big.Int).Set(chainId),
 		keyAlias: aws.String(keyAlias),
 		kms:      svc,
-		Addr:     addr,
 	}, nil
 }
 
@@ -94,6 +105,10 @@ func (s *KmsSigner) Sign(hash []byte) ([]byte, error) {
 	}
 	retSig := make([]byte, 65)
 	copy(retSig, padBigInt(rs.R))
+	// per EIP-2, S must be less than secp256k1n/2
+	if rs.S.Cmp(secp256k1halfN) > 0 {
+		rs.S.Sub(secp256k1N, rs.S) // s = secp256k1N - s
+	}
 	copy(retSig[32:], padBigInt(rs.S))
 	// now try recover to see if v is 0 or 1
 	pubKey, err := crypto.SigToPub(hash, retSig)
