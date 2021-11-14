@@ -77,6 +77,7 @@ func NewTransactorByExternalSigner(
 	address common.Address,
 	signer Signer,
 	client *ethclient.Client,
+	chainId *big.Int,
 	opts ...TxOption) *Transactor {
 	txopts := defaultTxOptions()
 	for _, o := range opts {
@@ -87,6 +88,7 @@ func NewTransactorByExternalSigner(
 		signer:  signer,
 		client:  client,
 		dopts:   txopts,
+		chainId: chainId,
 	}
 }
 
@@ -190,7 +192,7 @@ func (t *Transactor) transact(
 			if handler != nil {
 				go func() {
 					txHash := tx.Hash().Hex()
-					log.Debugf("Waiting for tx %s to be mined, nonce %d", txHash, nonce)
+					log.Debugf("Waiting for tx %s to be mined, chain %s nonce %d", txHash, t.chainId, nonce)
 					receipt, err := WaitMined(
 						context.Background(), client, tx,
 						WithBlockDelay(txopts.blockDelay),
@@ -207,13 +209,13 @@ func (t *Transactor) transact(
 							// this means pending txs after this will probably fail
 							t.lock.Lock()
 							t.nonce = pendingNonce - 1
-							log.Warnln("Reset transactor nonce to", t.nonce)
+							log.Warnf("Reset chain %s transactor nonce to %d", t.chainId, t.nonce)
 							t.lock.Unlock()
 						}
 						return
 					}
-					log.Debugf("Tx %s mined, status: %d, gas estimate: %d, gas used: %d",
-						txHash, receipt.Status, tx.Gas(), receipt.GasUsed)
+					log.Debugf("Tx %s mined, status %d, chain %s, gas estimate %d, gas used %d",
+						txHash, receipt.Status, t.chainId, tx.Gas(), receipt.GasUsed)
 					if handler.OnMined != nil {
 						handler.OnMined(receipt)
 					}
