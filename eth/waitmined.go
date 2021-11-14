@@ -137,7 +137,6 @@ func waitTxConfirmed(
 		if err == nil && confirmBlk.Cmp(header.Number) < 0 {
 			receipt, err = transactionReceipt(ctx, ec, txHash, opts.queryTimeout, opts.queryRetryInterval)
 			if err == nil {
-				log.Debugf("tx %x confirmed!", txHash)
 				return receipt, nil
 			} else if err == ethereum.NotFound || err == ErrMissingField {
 				return nil, fmt.Errorf("tx %x err: %w", txHash, ErrTxReorg)
