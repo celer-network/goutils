@@ -9,11 +9,16 @@ import (
 
 type txOptions struct {
 	// Transact
-	ethValue            *big.Int
-	minGasGwei          uint64
-	maxGasGwei          uint64
-	addGasGwei          uint64
-	forceGasGwei        uint64
+	ethValue *big.Int
+	// Legacy Tx gas price
+	minGasGwei   uint64
+	maxGasGwei   uint64
+	addGasGwei   uint64
+	forceGasGwei uint64
+	// EIP-1559 Tx gas price
+	maxFeePerGasGwei         uint64
+	maxPriorityFeePerGasGwei uint64
+	// Gas limit
 	gasLimit            uint64
 	addGasEstimateRatio float64
 
@@ -88,6 +93,18 @@ func WithAddGasGwei(g uint64) TxOption {
 func WithForceGasGwei(g uint64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.forceGasGwei = g
+	})
+}
+
+func WithMaxFeePerGasGwei(g uint64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.maxFeePerGasGwei = g
+	})
+}
+
+func WithMaxPriorityFeePerGasGwei(g uint64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.maxPriorityFeePerGasGwei = g
 	})
 }
 
