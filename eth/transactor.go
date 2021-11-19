@@ -291,11 +291,10 @@ func determine1559GasPrice(
 	}
 	if txopts.maxFeePerGasGwei == 0 {
 		// Use (maxPriorityFeePerGas + 2x the curent basefee), the same heuristic as go-ethereum
-		gasFeeCap := new(big.Int).Add(
+		signer.GasFeeCap = new(big.Int).Add(
 			signer.GasTipCap,
 			new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
 		)
-		signer.GasFeeCap = gasFeeCap
 	} else {
 		signer.GasFeeCap = new(big.Int).SetUint64(txopts.maxFeePerGasGwei * 1e9)
 	}
