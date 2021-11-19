@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/celer-network/goutils/log"
 	"github.com/ethereum/go-ethereum"
@@ -25,7 +26,10 @@ const (
 )
 
 var (
-	ErrExceedMaxGas = errors.New("suggested gas price exceeds max allowed")
+	ErrExceedMaxGas        = errors.New("suggested gas price exceeds max allowed")
+	ErrConflictingGasFlags = errors.New("cannot specify both legacy and EIP-1559 gas flags")
+
+	ctxTimeout = 3 * time.Second
 )
 
 type Transactor struct {
@@ -129,40 +133,14 @@ func (t *Transactor) transact(
 	}
 	signer := t.newTransactOpts()
 	client := t.client
-	gasPrice, err := determineGasPrice(txopts, client)
+	// Set gas price and limit
+	err := t.determineGas(method, signer, txopts, client)
 	if err != nil {
-		return nil, fmt.Errorf("determineGasPrice err: %w", err)
+		return nil, fmt.Errorf("determineGas err: %w", err)
 	}
-	signer.GasPrice = gasPrice
+	// Set value
 	signer.Value = txopts.ethValue
-	if txopts.gasLimit > 0 {
-		// use the specified limit
-		signer.GasLimit = txopts.gasLimit
-	} else if txopts.addGasEstimateRatio > 0.0 {
-		// estimate gas and increase gas limit by configured ratio
-		signer.NoSend = true
-		dryTx, err := method(client, signer)
-		if err != nil {
-			return nil, fmt.Errorf("dry-run err: %w", err)
-		}
-		signer.NoSend = false
-		typesMsg, err := dryTx.AsMessage(types.NewLondonSigner(t.chainId), big.NewInt(0))
-		if err != nil {
-			return nil, fmt.Errorf("failed to get typesMsg err: %w", err)
-		}
-		callMsg := ethereum.CallMsg{
-			From:     typesMsg.From(),
-			To:       typesMsg.To(),
-			GasPrice: typesMsg.GasPrice(),
-			Value:    typesMsg.Value(),
-			Data:     typesMsg.Data(),
-		}
-		estimatedGas, err := client.EstimateGas(context.Background(), callMsg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to estimate gas err: %w", err)
-		}
-		signer.GasLimit = uint64(float64(estimatedGas) * (1 + txopts.addGasEstimateRatio))
-	}
+	// Set nonce
 	pendingNonce, err := t.client.PendingNonceAt(context.Background(), t.address)
 	if err != nil {
 		return nil, fmt.Errorf("PendingNonceAt err: %w", err)
@@ -227,16 +205,103 @@ func (t *Transactor) transact(
 	}
 }
 
-func determineGasPrice(txopts txOptions, client *ethclient.Client) (*big.Int, error) {
+// determineGas sets the gas price and gas limit on the signer
+func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
+	// 1. Determine gas price
+	// Only accept legacy flags or EIP-1559 flags, not both
+	hasLegacyFlags := txopts.forceGasGwei > 0 || txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
+	has1559Flags := txopts.maxFeePerGasGwei > 0 || txopts.maxPriorityFeePerGasGwei > 0
+	if hasLegacyFlags && has1559Flags {
+		return ErrConflictingGasFlags
+	}
+	// Check if chain supports EIP-1559
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+	defer cancel()
+	head, err := client.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to call HeaderByNumber: %w", err)
+	}
+	send1559Tx := false
+	if head.BaseFee != nil && !hasLegacyFlags {
+		send1559Tx = true
+		err = determine1559GasPrice(ctx, signer, txopts, client, head)
+		if err != nil {
+			return fmt.Errorf("failed to determine EIP-1559 gas price: %w", err)
+		}
+	} else {
+		// Legacy pricing
+		err = determineLegacyGasPrice(ctx, signer, txopts, client)
+		if err != nil {
+			return fmt.Errorf("failed to determine legacy gas price: %w", err)
+		}
+	}
+
+	// 2. Determine gas limit
+	if txopts.gasLimit > 0 {
+		// Use the specified limit if set
+		signer.GasLimit = txopts.gasLimit
+		return nil
+	} else if txopts.addGasEstimateRatio > 0.0 {
+		// 2.1. Estimate gas
+		signer.NoSend = true
+		dryTx, err := method(client, signer)
+		if err != nil {
+			return fmt.Errorf("tx dry-run err: %w", err)
+		}
+		signer.NoSend = false
+		var typesMsg types.Message
+		londonSigner := types.NewLondonSigner(t.chainId)
+		if send1559Tx {
+			typesMsg, err = dryTx.AsMessage(londonSigner, head.BaseFee)
+		} else {
+			typesMsg, err = dryTx.AsMessage(londonSigner, nil)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to get typesMsg: %w", err)
+		}
+		callMsg := ethereum.CallMsg{
+			From:     typesMsg.From(),
+			To:       typesMsg.To(),
+			GasPrice: typesMsg.GasPrice(),
+			Value:    typesMsg.Value(),
+			Data:     typesMsg.Data(),
+		}
+		estimatedGas, err := client.EstimateGas(ctx, callMsg)
+		if err != nil {
+			return fmt.Errorf("failed to call EstimateGas: %w", err)
+		}
+		// 2.2. Multiply gas limit by the configured ratio
+		signer.GasLimit = uint64(float64(estimatedGas) * (1 + txopts.addGasEstimateRatio))
+	}
+	// If addGasEstimateRatio not specified, just defer to go-ethereum for gas limit estimation
+	return nil
+}
+
+// determine1559GasPrice sets the gas price on the signer based on the EIP-1559 fee model
+func determine1559GasPrice(
+	ctx context.Context, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client, head *types.Header) error {
+	if txopts.maxPriorityFeePerGasGwei > 0 {
+		signer.GasTipCap = new(big.Int).SetUint64(txopts.maxPriorityFeePerGasGwei * 1e9)
+	}
+	if txopts.maxFeePerGasGwei > 0 {
+		signer.GasFeeCap = new(big.Int).SetUint64(txopts.maxFeePerGasGwei * 1e9)
+	}
+	return nil
+}
+
+// determineLegacyGasPrice sets the gas price on the signer based on the legacy fee model
+func determineLegacyGasPrice(
+	ctx context.Context, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
 	if txopts.forceGasGwei > 0 {
-		return new(big.Int).SetUint64(txopts.forceGasGwei * 1e9), nil
+		signer.GasPrice = new(big.Int).SetUint64(txopts.forceGasGwei * 1e9)
+		return nil
 	}
 	gasPrice, err := client.SuggestGasPrice(context.Background())
 	if err != nil {
-		return nil, fmt.Errorf("SuggestGasPrice err: %w", err)
+		return fmt.Errorf("failed to call SuggestGasPrice: %w", err)
 	}
-	if txopts.addGasGwei > 0 { // add gas price to the suggested value to speed up transactions
-		addPrice := new(big.Int).SetUint64(txopts.addGasGwei * 1e9) // 1e9 is 1G
+	if txopts.addGasGwei > 0 { // Add gas price to the suggested value to speed up transactions
+		addPrice := new(big.Int).SetUint64(txopts.addGasGwei * 1e9)
 		gasPrice.Add(gasPrice, addPrice)
 	}
 	if txopts.minGasGwei > 0 { // gas can't be lower than minGas
@@ -251,10 +316,11 @@ func determineGasPrice(txopts txOptions, client *ethclient.Client) (*big.Int, er
 		// GasPrice is larger than allowed cap, return error
 		if maxPrice.Cmp(gasPrice) < 0 {
 			log.Warnf("suggested gas price %s larger than cap %s", gasPrice, maxPrice)
-			return nil, ErrExceedMaxGas
+			return ErrExceedMaxGas
 		}
 	}
-	return gasPrice, nil
+	signer.GasPrice = gasPrice
+	return nil
 }
 
 func (t *Transactor) ContractCaller() bind.ContractCaller {
@@ -270,8 +336,10 @@ func (t *Transactor) WaitMined(txHash string, opts ...TxOption) (*types.Receipt,
 	for _, o := range opts {
 		o.apply(&txopts)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+	defer cancel()
 	return WaitMinedWithTxHash(
-		context.Background(), t.client, txHash,
+		ctx, t.client, txHash,
 		WithBlockDelay(txopts.blockDelay),
 		WithPollingInterval(txopts.pollingInterval),
 		WithTimeout(txopts.timeout),
