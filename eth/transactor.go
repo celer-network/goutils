@@ -280,22 +280,10 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 // determine1559GasPrice sets the gas price on the signer based on the EIP-1559 fee model
 func determine1559GasPrice(
 	ctx context.Context, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client, head *types.Header) error {
-	if txopts.maxPriorityFeePerGasGwei == 0 {
-		gasTipCap, suggestGasTipCapErr := client.SuggestGasTipCap(ctx)
-		if suggestGasTipCapErr != nil {
-			return fmt.Errorf("failed to call SuggestGasTipCap: %w", suggestGasTipCapErr)
-		}
-		signer.GasTipCap = gasTipCap
-	} else {
+	if txopts.maxPriorityFeePerGasGwei > 0 {
 		signer.GasTipCap = new(big.Int).SetUint64(txopts.maxPriorityFeePerGasGwei * 1e9)
 	}
-	if txopts.maxFeePerGasGwei == 0 {
-		// Use (maxPriorityFeePerGas + 2x the curent basefee), the same heuristic as go-ethereum
-		signer.GasFeeCap = new(big.Int).Add(
-			signer.GasTipCap,
-			new(big.Int).Mul(head.BaseFee, big.NewInt(2)),
-		)
-	} else {
+	if txopts.maxFeePerGasGwei > 0 {
 		signer.GasFeeCap = new(big.Int).SetUint64(txopts.maxFeePerGasGwei * 1e9)
 	}
 	return nil
