@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kms"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -66,25 +67,44 @@ func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*K
 	}, nil
 }
 
+// satisfy Signer interface SignEthMessage
 func (s *KmsSigner) SignEthMessage(data []byte) ([]byte, error) {
 	return s.Sign(GeneratePrefixedHash(data))
 }
 
+// satisfy Signer interface SignEthTransaction
 func (s *KmsSigner) SignEthTransaction(rawTx []byte) ([]byte, error) {
 	tx := new(types.Transaction)
-	if err := rlp.DecodeBytes(rawTx, tx); err != nil {
-		return nil, err
-	}
-	londonSigner := types.NewLondonSigner(s.chainId)
-	signature, err := s.Sign(londonSigner.Hash(tx).Bytes())
+	err := rlp.DecodeBytes(rawTx, tx)
 	if err != nil {
 		return nil, err
 	}
-	tx, err = tx.WithSignature(londonSigner, signature)
+	tx, err = s.SignerFn(s.Addr, tx)
 	if err != nil {
 		return nil, err
 	}
 	return rlp.EncodeToBytes(tx)
+}
+
+// return bind.TransactOpts to be used in bound contract tx
+func (s *KmsSigner) NewTransactOpts() *bind.TransactOpts {
+	return &bind.TransactOpts{
+		From:   s.Addr,
+		Signer: s.SignerFn,
+	}
+}
+
+// satisfy bind/base.go SignerFn
+func (s *KmsSigner) SignerFn(addr common.Address, tx *types.Transaction) (*types.Transaction, error) {
+	if addr != s.Addr {
+		return nil, bind.ErrNotAuthorized
+	}
+	signer := types.LatestSignerForChainID(s.chainId)
+	signature, err := s.Sign(signer.Hash(tx).Bytes())
+	if err != nil {
+		return nil, err
+	}
+	return tx.WithSignature(signer, signature)
 }
 
 // input must be hash, return 65 bytes sig or error. sig[64] is 0 or 1
