@@ -87,7 +87,7 @@ func (s *KmsSigner) SignEthTransaction(rawTx []byte) ([]byte, error) {
 }
 
 // return bind.TransactOpts to be used in bound contract tx
-func (s *KmsSigner) NewTransactor() *bind.TransactOpts {
+func (s *KmsSigner) NewTransactOpts() *bind.TransactOpts {
 	return &bind.TransactOpts{
 		From:   s.Addr,
 		Signer: s.SignerFn,
