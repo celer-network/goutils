@@ -498,15 +498,13 @@ func (w *Watch) dequeue() (*types.Log, error) {
 
 	elem := w.logQueue.Front()
 	w.logQueue.Remove(elem)
+	w.ackWait = true
 	return elem.Value.(*types.Log), nil
 }
 
 // Fetch the next log event.  The function will block until either an
 // event log is available, or the watcher is closed.
 func (w *Watch) Next() (types.Log, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	var empty types.Log
 
 	if w.isClosed() {
@@ -523,7 +521,7 @@ func (w *Watch) Next() (types.Log, error) {
 
 	w.ackID.BlockNumber = nextLog.BlockNumber
 	w.ackID.Index = int64(nextLog.Index)
-	w.ackWait = true
+	
 	return *nextLog, nil
 }
 
