@@ -488,12 +488,15 @@ func (w *Watch) dequeue() (*types.Log, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	for !w.closed && w.logQueue.Len() == 0 {
+	for !w.closed && w.logQueue.Len() == 0 && !w.ackWait {
 		w.logQueueCond.Wait()
 	}
 
 	if w.closed {
 		return nil, fmt.Errorf("watch name '%s' closed", w.name)
+	}
+	if w.ackWait {
+		return nil, fmt.Errorf("last event log received not yet ACKed")
 	}
 
 	elem := w.logQueue.Front()
@@ -521,7 +524,7 @@ func (w *Watch) Next() (types.Log, error) {
 
 	w.ackID.BlockNumber = nextLog.BlockNumber
 	w.ackID.Index = int64(nextLog.Index)
-	
+
 	return *nextLog, nil
 }
 
