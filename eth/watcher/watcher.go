@@ -512,6 +512,12 @@ func (w *Watch) dequeue() (*types.Log, error) {
 // event log is available, or the watcher is closed.
 func (w *Watch) Next() (types.Log, error) {
 	var empty types.Log
+	if w.isClosed() {
+		return empty, fmt.Errorf("watch name '%s' already closed", w.name)
+	}
+	if w.ackWait {
+		return empty, fmt.Errorf("last event log received not yet ACKed")
+	}
 	nextLog, err := w.dequeue()
 	if err != nil {
 		return empty, err
