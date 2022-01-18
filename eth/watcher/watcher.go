@@ -452,7 +452,7 @@ func (w *Watch) fetchLogEvents() {
 					log.Warnln("cannot persist resume pointer:", w.name, err)
 				}
 			}
-			defer w.mu.Unlock()
+			w.mu.Unlock()
 		}
 		log.Tracef("fast forward %s fromBlock to %d", w.name, w.fromBlock)
 	}
@@ -501,30 +501,21 @@ func (w *Watch) dequeue() (*types.Log, error) {
 
 	elem := w.logQueue.Front()
 	w.logQueue.Remove(elem)
+	nextLog := elem.Value.(*types.Log)
+	w.ackID.BlockNumber = nextLog.BlockNumber
+	w.ackID.Index = int64(nextLog.Index)
 	w.ackWait = true
-	return elem.Value.(*types.Log), nil
+	return nextLog, nil
 }
 
 // Fetch the next log event.  The function will block until either an
 // event log is available, or the watcher is closed.
 func (w *Watch) Next() (types.Log, error) {
 	var empty types.Log
-
-	if w.isClosed() {
-		return empty, fmt.Errorf("watch name '%s' already closed", w.name)
-	}
-	if w.ackWait {
-		return empty, fmt.Errorf("last event log received not yet ACKed")
-	}
-
 	nextLog, err := w.dequeue()
 	if err != nil {
 		return empty, err
 	}
-
-	w.ackID.BlockNumber = nextLog.BlockNumber
-	w.ackID.Index = int64(nextLog.Index)
-
 	return *nextLog, nil
 }
 
