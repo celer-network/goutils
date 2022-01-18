@@ -443,6 +443,17 @@ func (w *Watch) fetchLogEvents() {
 		if fromBlock > w.fromBlock {
 			w.fromBlock = fromBlock
 		}
+		// when there is no event in queue and the Watch is not waiting for Ack(), we
+		// assert that at this moment, no event is being processed or going to be processed.
+		if w.logQueue.Len() == 0 {
+			w.mu.Lock()
+			if !w.ackWait {
+				if err := w.service.dal.UpdateMonitorBlock(w.name, w.fromBlock, notBlockIndex); err != nil {
+					log.Warnln("cannot persist resume pointer:", w.name, err)
+				}
+			}
+			w.mu.Unlock()
+		}
 		log.Tracef("fast forward %s fromBlock to %d", w.name, w.fromBlock)
 	}
 }
@@ -477,39 +488,40 @@ func (w *Watch) dequeue() (*types.Log, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	for !w.closed && w.logQueue.Len() == 0 {
+	for !w.closed && w.logQueue.Len() == 0 && !w.ackWait {
 		w.logQueueCond.Wait()
 	}
 
 	if w.closed {
 		return nil, fmt.Errorf("watch name '%s' closed", w.name)
 	}
+	if w.ackWait {
+		return nil, fmt.Errorf("last event log received not yet ACKed")
+	}
 
 	elem := w.logQueue.Front()
 	w.logQueue.Remove(elem)
-	return elem.Value.(*types.Log), nil
+	nextLog := elem.Value.(*types.Log)
+	w.ackID.BlockNumber = nextLog.BlockNumber
+	w.ackID.Index = int64(nextLog.Index)
+	w.ackWait = true
+	return nextLog, nil
 }
 
 // Fetch the next log event.  The function will block until either an
 // event log is available, or the watcher is closed.
 func (w *Watch) Next() (types.Log, error) {
 	var empty types.Log
-
 	if w.isClosed() {
 		return empty, fmt.Errorf("watch name '%s' already closed", w.name)
 	}
 	if w.ackWait {
 		return empty, fmt.Errorf("last event log received not yet ACKed")
 	}
-
 	nextLog, err := w.dequeue()
 	if err != nil {
 		return empty, err
 	}
-
-	w.ackID.BlockNumber = nextLog.BlockNumber
-	w.ackID.Index = int64(nextLog.Index)
-	w.ackWait = true
 	return *nextLog, nil
 }
 
