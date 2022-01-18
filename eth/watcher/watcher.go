@@ -446,12 +446,13 @@ func (w *Watch) fetchLogEvents() {
 		// when there is no event in queue and the Watch is not waiting for Ack(), we
 		// assert that at this moment, no event is being processed or going to be processed.
 		if w.logQueue.Len() == 0 {
-			time.Sleep(time.Millisecond)
+			w.mu.Lock()
 			if !w.ackWait {
 				if err := w.service.dal.UpdateMonitorBlock(w.name, w.fromBlock, notBlockIndex); err != nil {
 					log.Warnln("cannot persist resume pointer:", w.name, err)
 				}
 			}
+			defer w.mu.Unlock()
 		}
 		log.Tracef("fast forward %s fromBlock to %d", w.name, w.fromBlock)
 	}
@@ -503,6 +504,9 @@ func (w *Watch) dequeue() (*types.Log, error) {
 // Fetch the next log event.  The function will block until either an
 // event log is available, or the watcher is closed.
 func (w *Watch) Next() (types.Log, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	var empty types.Log
 
 	if w.isClosed() {
