@@ -132,14 +132,14 @@ func (t *Transactor) transact(
 		o.apply(&txopts)
 	}
 	signer := t.newTransactOpts()
+	// Set value
+	signer.Value = txopts.ethValue
 	client := t.client
 	// Set gas price and limit
 	err := t.determineGas(method, signer, txopts, client)
 	if err != nil {
 		return nil, fmt.Errorf("determineGas err: %w", err)
 	}
-	// Set value
-	signer.Value = txopts.ethValue
 	// Set nonce
 	pendingNonce, err := t.client.PendingNonceAt(context.Background(), t.address)
 	if err != nil {
