@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -91,18 +92,20 @@ func IsSignatureValid(signer common.Address, data []byte, sig []byte) bool {
 }
 
 func RecoverSigner(data []byte, sig []byte) (common.Address, error) {
+	if len(sig) != 65 {
+		return common.Address{}, secp256k1.ErrInvalidSignatureLen
+	}
+
 	// clone one to use, to make sure the original sig won't be changed by me
 	tmpSig := make([]byte, len(sig))
 	copy(tmpSig, sig)
 
-	if len(tmpSig) == 65 { // we could return zeroAddr if len not 65
-		if tmpSig[64] == 27 || tmpSig[64] == 28 {
-			// SigToPub only expect v to be 0 or 1,
-			// see https://github.com/ethereum/go-ethereum/blob/v1.8.23/internal/ethapi/api.go#L468.
-			// we've been ok as our own code only has v 0 or 1, but using external signer may cause issue
-			// we also fix v in celersdk.PublishSignedResult to be extra safe
-			tmpSig[64] -= 27
-		}
+	if tmpSig[64] == 27 || tmpSig[64] == 28 {
+		// SigToPub only expect v to be 0 or 1,
+		// see https://github.com/ethereum/go-ethereum/blob/v1.8.23/internal/ethapi/api.go#L468.
+		// we've been ok as our own code only has v 0 or 1, but using external signer may cause issue
+		// we also fix v in celersdk.PublishSignedResult to be extra safe
+		tmpSig[64] -= 27
 	}
 	pubKey, err := crypto.SigToPub(GeneratePrefixedHash(data), tmpSig)
 	if err != nil {
