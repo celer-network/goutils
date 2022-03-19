@@ -36,10 +36,10 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 		savedLogID = m.initFromInQ(q, key)
 	}
 
-	log.Infoln("start monitoring", key, "interval:", cfg.ChkInterval, "fromBlk:", q.FromBlock)
+	log.Infoln("start monitoring", key, "interval:", cfg.ChkIntv, "fromBlk:", q.FromBlock)
 
-	// create ticker by cfg.ChkInterval
-	ticker := time.NewTicker(cfg.ChkInterval)
+	// create ticker by cfg.ChkIntv
+	ticker := time.NewTicker(cfg.ChkIntv)
 	defer ticker.Stop()
 
 	for {
@@ -93,9 +93,6 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 			// set savedLogID to nil so next ticker won't need to check again because from is bigger
 			if savedLogID != nil && nextFrom > savedLogID.BlkNum {
 				savedLogID = nil
-			}
-			if m.onlyOnce {
-				return
 			}
 		}
 	}

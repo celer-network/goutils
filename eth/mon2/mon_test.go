@@ -67,30 +67,35 @@ func TestCalcNextFrom(t *testing.T) {
 	}
 }
 
-func cbfn(string, types.Log) {}
-
+// test from and to in FilterQuery are set correctly
 func TestFilterQuery(t *testing.T) {
-	// test from and to in FilterQuery are set correctly
+	dal := make(MockDAL)
 	ec := &MockEc{
 		T:      t,
 		blkNum: 100,
 	}
-	dal := make(MockDAL)
 	// m starts w/ blknum 100
 	m, _ := NewMonitor(ec, dal, PerChainCfg{
-		BlkIntv:  time.Second, // we'll manually call updateBlkNum
+		BlkIntv:  time.Minute, // we'll manually call updateBlkNum
 		BlkDelay: 5,
 	})
-	m.onlyOnce = true
-	chkIntv := time.Millisecond
+	chkIntv := time.Millisecond // increase this if test err on slow/busy machine
 	go m.MonAddr(PerAddrCfg{
-		ChkInterval: chkIntv, // increase this if test err on slow machine
-		FromBlk:     50,      // explicit set, will take effect
-	}, cbfn)
+		ChkIntv: chkIntv,
+		FromBlk: 50, // explicit set, will take effect
+	}, func(string, types.Log) {})
 	// when ec.FilterLogs gets called, q.From should be 50, to should be 100-5
-	ec.expFrom, ec.expTo = 50, 95
+	ec.expFrom = append(ec.expFrom, 50)
+	ec.expTo = append(ec.expTo, 95) // 95 = 100 - 5
+	// twice time to ensure MonAddr ticker triggers
+	// note it may triggers more than once
 	time.Sleep(2 * chkIntv)
+	// make sure expFrom/expTo are empty now, meaning FilterLogs has been calld
+	chkEq(len(ec.expFrom), 0, t)
+	chkEq(len(ec.expTo), 0, t)
+	// exit MonAddr loop
 	m.Close()
+
 }
 
 // mock eth client
@@ -98,7 +103,8 @@ type MockEc struct {
 	*testing.T
 	chid, blkNum uint64
 	// when FilterLogs is called, expected value for q.FromBlock and q.ToBlock
-	expFrom, expTo uint64
+	// will be popped in each call
+	expFrom, expTo []uint64
 	// logs to be returned in next FilterLogs call
 	logs []types.Log
 }
@@ -112,13 +118,21 @@ func (ec *MockEc) BlockNumber(ctx context.Context) (uint64, error) {
 	return ec.blkNum, nil
 }
 
+// pop first from expFrom/expTo and compare, if list is empty, do nothing
+func (ec *MockEc) chkFromTo(qfrom, qto uint64) {
+	var exp uint64
+	if len(ec.expFrom) > 0 {
+		exp, ec.expFrom = ec.expFrom[0], ec.expFrom[1:]
+		chkEq(qfrom, exp, ec.T)
+	}
+	if len(ec.expTo) > 0 {
+		exp, ec.expTo = ec.expTo[0], ec.expTo[1:]
+		chkEq(qto, exp, ec.T)
+	}
+}
+
 func (ec *MockEc) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
-	if ec.expFrom > 0 {
-		chkEq(q.FromBlock.Uint64(), ec.expFrom, ec.T)
-	}
-	if ec.expTo > 0 {
-		chkEq(q.ToBlock.Uint64(), ec.expTo, ec.T)
-	}
+	ec.chkFromTo(q.FromBlock.Uint64(), q.ToBlock.Uint64())
 	var ret []types.Log
 	keep := ec.logs[:0] // share same backing array and capacity as ec.logs so can modify it in-place
 	for _, elog := range ec.logs {

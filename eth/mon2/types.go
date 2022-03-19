@@ -45,10 +45,10 @@ type PerChainCfg struct {
 
 // mon config for each contract
 type PerAddrCfg struct {
-	Addr        common.Address // contract addr
-	ChkInterval time.Duration  // interval to call FilterLogs
-	AbiStr      string         // XxxABI or XxxMetaData.ABI abi string from this contract's go binding, needed to match log topic to event name, if empty string, evname in callback is also empty
-	FromBlk     uint64         // optional. if > 0, means ignore persisted blocknum and use this for FromBlk in queries, don't set unless you know what you're doing
+	Addr    common.Address // contract addr
+	ChkIntv time.Duration  // interval to call FilterLogs
+	AbiStr  string         // XxxABI or XxxMetaData.ABI abi string from this contract's go binding, needed to match log topic to event name, if empty string, evname in callback is also empty
+	FromBlk uint64         // optional. if > 0, means ignore persisted blocknum and use this for FromBlk in queries, don't set unless you know what you're doing
 }
 
 type Monitor struct {
@@ -59,10 +59,7 @@ type Monitor struct {
 	chainId, blkNum uint64
 
 	lock sync.RWMutex // protect blkNum, can be also used to protect ec when later we support replace failed ec
-	quit chan bool    // this ch will close on m.Close so all loops know to exit
-
-	// only used for testing, return after one ticker in MonAddr
-	onlyOnce bool
+	quit chan bool    // this ch will close in m.Close so all loops know to exit
 }
 
 // cfg is not pointer to ensure value copy and avoid unexpected change by other code
