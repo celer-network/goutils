@@ -60,6 +60,9 @@ type Monitor struct {
 
 	lock sync.RWMutex // protect blkNum, can be also used to protect ec when later we support replace failed ec
 	quit chan bool    // this ch will close on m.Close so all loops know to exit
+
+	// only used for testing, return after one ticker in MonAddr
+	onlyOnce bool
 }
 
 // cfg is not pointer to ensure value copy and avoid unexpected change by other code

@@ -76,19 +76,21 @@ func TestFilterQuery(t *testing.T) {
 		blkNum: 100,
 	}
 	dal := make(MockDAL)
-
+	// m starts w/ blknum 100
 	m, _ := NewMonitor(ec, dal, PerChainCfg{
 		BlkIntv:  time.Second, // we'll manually call updateBlkNum
 		BlkDelay: 5,
 	})
-	// m starts w/ blknum 100
-	m.MonAddr(PerAddrCfg{
-		ChkInterval: 10 * time.Millisecond, // increase this if test err on slow machine
-		FromBlk:     50,                    // explicit set, will take effect
+	m.onlyOnce = true
+	chkIntv := time.Millisecond
+	go m.MonAddr(PerAddrCfg{
+		ChkInterval: chkIntv, // increase this if test err on slow machine
+		FromBlk:     50,      // explicit set, will take effect
 	}, cbfn)
-}
-func TestMon(t *testing.T) {
-	// todo: add tests
+	// when ec.FilterLogs gets called, q.From should be 50, to should be 100-5
+	ec.expFrom, ec.expTo = 50, 95
+	time.Sleep(2 * chkIntv)
+	m.Close()
 }
 
 // mock eth client
@@ -111,6 +113,12 @@ func (ec *MockEc) BlockNumber(ctx context.Context) (uint64, error) {
 }
 
 func (ec *MockEc) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
+	if ec.expFrom > 0 {
+		chkEq(q.FromBlock.Uint64(), ec.expFrom, ec.T)
+	}
+	if ec.expTo > 0 {
+		chkEq(q.ToBlock.Uint64(), ec.expTo, ec.T)
+	}
 	var ret []types.Log
 	keep := ec.logs[:0] // share same backing array and capacity as ec.logs so can modify it in-place
 	for _, elog := range ec.logs {

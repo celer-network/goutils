@@ -10,16 +10,18 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // start monitoring events from addr with configured interval, calls cbfn for each recived log
+// BLOCKING until m is Closed
 func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 	key := fmt.Sprintf("%d-%x", m.chainId, cfg.Addr)
 	// needed to provide evname to callback func
 	topicEvMap := EventIDMap(cfg.AbiStr)
 
-	// no topics to receive all events from this address
-	q := ethereum.FilterQuery{
+	// q has no topics to receive all events from this address
+	q := &ethereum.FilterQuery{
 		Addresses: []common.Address{cfg.Addr},
 	}
 
@@ -27,23 +29,11 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 	// already processed events on the same block
 	var savedLogID *LogEventID
 
-	// now figure out first query's fromblock, default to current, if FromBlock is set, use it
-	// otherwise try to get blknum from db if found, use it.
-	q.FromBlock = toBigInt(m.blkNum)
-	// use FromBlk if it's set
+	// if cfg explicitly has FromBlk, use it, otherwise try to figure out based on db and m.blkNum
 	if cfg.FromBlk > 0 {
-		q.FromBlock.SetUint64(cfg.FromBlk)
+		q.FromBlock = toBigInt(cfg.FromBlk)
 	} else {
-		// try resume from last saved block and log idx
-		blockNum, blockIdx, found, err := m.dal.GetMonitorBlock(key)
-		if err == nil && found {
-			q.FromBlock.SetUint64(blockNum)
-			// set to last saved index so we can skip already processed logs from same block
-			savedLogID = &LogEventID{
-				BlkNum: blockNum,
-				Index:  blockIdx, // this may be -1 in fast forward case
-			}
-		}
+		savedLogID = m.initFromInQ(q, key)
 	}
 
 	log.Infoln("start monitoring", key, "interval:", cfg.ChkInterval, "fromBlk:", q.FromBlock)
@@ -51,71 +41,92 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 	// create ticker by cfg.ChkInterval
 	ticker := time.NewTicker(cfg.ChkInterval)
 	defer ticker.Stop()
-	go func() {
-		for {
-			select {
-			case <-m.quit:
-				log.Debugln("MonAddr:", key, "quit")
-				return
 
-			case <-ticker.C:
-				// q.FromBlock is set before first ticker and updated in the end of each ticker
-				fromBlk := q.FromBlock.Uint64()
-				toBlk := m.CalcToBlkNum(fromBlk)
-				if toBlk < fromBlk {
-					continue // no need to query yet
+	for {
+		select {
+		case <-m.quit:
+			log.Info("MonAddr:", key, "quit")
+			return
+
+		case <-ticker.C:
+			// q.FromBlock is set before first ticker and updated in the end of each ticker
+			fromBlk := q.FromBlock.Uint64()
+			toBlk := m.CalcToBlkNum(fromBlk)
+			if toBlk < fromBlk {
+				continue // no need to query yet
+			}
+			q.ToBlock = toBigInt(toBlk)
+
+			todoLogs := m.doOneQuery(q, key, savedLogID)
+			// now go over todoLogs and call callback func
+			// it's possible all have been skipped so we don't do anything
+			for _, elog := range todoLogs {
+				if elog.Removed {
+					log.Debugln("skip removed log:", key, elog.BlockNumber, elog.Index)
+					continue
 				}
-				q.ToBlock = toBigInt(toBlk)
+				cbfn(topicEvMap[elog.Topics[0]], elog)
+			}
 
-				logs, err := m.ec.FilterLogs(context.TODO(), q)
-				if err != nil {
-					log.Warnln(key, "getlogs failed. err:", err)
-				}
-
-				// if resume from db and on first ticker, as fromblock is same as db, we may get same events again
-				// how many logs should be skipped, only could be non-zero if savedLogID isn't nil
-				// if savedLogID is nil, return 0 directly
-				skipped := savedLogID.CountSkip(logs)
-
-				// now go over logs[skipped:], and call callback func
-				// it's possible all have been skipped so we don't do anything
-				todoLogs := logs[skipped:]
-				for _, elog := range todoLogs {
-					if elog.Removed {
-						log.Debugln("skip removed log:", key, elog.BlockNumber, elog.Index)
-						continue
-					}
-					cbfn(topicEvMap[elog.Topics[0]], elog)
-				}
-
-				// if len(todoLogs) > 0, we've handled new logs, should update db and next fromBlock,
-				var nextFrom uint64
-				if len(todoLogs) > 0 {
-					// last handled log's blknum + 1
-					lastHandledLog := todoLogs[len(todoLogs)-1]
-					nextFrom = lastHandledLog.BlockNumber + 1
-					m.dal.SetMonitorBlock(key, lastHandledLog.BlockNumber, int64(lastHandledLog.Index))
-				} else {
-					// didn't handle any new log, fast forward block
-					nextFrom = m.CalcNextFromBlkNum(fromBlk, toBlk)
-					// if nextFrom is the same as fromBlk, we must not override blknum/idx in db
-					if nextFrom > fromBlk {
-						// if nextFrom is larger, we set nextFrom and -1 idx so idx 0 log will be handled
-						// note this is an optimization to avoid resume from last seen log position if contract is mostly idle
-						// ie. if process restarts, we'll start from a safe from instead of last seen log blknum which may be long time ago
-						m.dal.SetMonitorBlock(key, nextFrom, -1)
-					}
-				}
-				// update q.FromBlock
-				q.FromBlock.SetUint64(nextFrom)
-
-				// set savedLogID to nil so next ticker won't need to check again because from is bigger
-				if savedLogID != nil && nextFrom > savedLogID.BlkNum {
-					savedLogID = nil
+			// if len(todoLogs) > 0, we've handled new logs, should update db and next fromBlock,
+			var nextFrom uint64
+			if len(todoLogs) > 0 {
+				// last handled log's blknum + 1, we don't move to toBlock in case there are inconsistency
+				// between nodes, so handled log blk+1 will guarantee no miss event
+				lastHandledLog := todoLogs[len(todoLogs)-1]
+				nextFrom = lastHandledLog.BlockNumber + 1
+				m.dal.SetMonitorBlock(key, lastHandledLog.BlockNumber, int64(lastHandledLog.Index))
+			} else {
+				// didn't handle any new log, fast forward block
+				nextFrom = m.CalcNextFromBlkNum(fromBlk, toBlk)
+				// if nextFrom is the same as fromBlk, we must not override blknum/idx in db
+				if nextFrom > fromBlk {
+					// if nextFrom is larger, we set nextFrom and -1 idx so idx 0 log will be handled
+					// note this is an optimization to avoid resume from last seen log position if contract is mostly idle
+					// ie. if process restarts, we'll start from a safe from instead of last seen log blknum which may be long time ago
+					m.dal.SetMonitorBlock(key, nextFrom, -1)
 				}
 			}
+			// update q.FromBlock
+			q.FromBlock.SetUint64(nextFrom)
+
+			// set savedLogID to nil so next ticker won't need to check again because from is bigger
+			if savedLogID != nil && nextFrom > savedLogID.BlkNum {
+				savedLogID = nil
+			}
+			if m.onlyOnce {
+				return
+			}
 		}
-	}()
+	}
+}
+
+// set q.FromBLock from db or latest blkNum. return non-nil if resumed from db
+func (m *Monitor) initFromInQ(q *ethereum.FilterQuery, key string) *LogEventID {
+	// try resume from last saved block and log idx
+	blockNum, blockIdx, found, err := m.dal.GetMonitorBlock(key)
+	if err == nil && found {
+		q.FromBlock.SetUint64(blockNum)
+		return &LogEventID{
+			BlkNum: blockNum,
+			Index:  blockIdx, // this may be -1 in fast forward case
+		}
+	}
+	// not found in db, use current blkNum
+	q.FromBlock = toBigInt(m.GetBlkNum())
+	return nil
+}
+
+// calls FilterLogs and skip already processed
+func (m *Monitor) doOneQuery(q *ethereum.FilterQuery, key string, savedLogID *LogEventID) []types.Log {
+	logs, err := m.ec.FilterLogs(context.TODO(), *q)
+	if err != nil {
+		log.Warnln(key, "getlogs failed. err:", err)
+	}
+	// if resume from db and on first ticker, as fromblock is same as db, we may get same events again
+	// how many logs should be skipped, only could be non-zero if savedLogID isn't nil
+	// if savedLogID is nil, return 0 directly
+	return logs[savedLogID.CountSkip(logs):]
 }
 
 // parse abi and return map from event.ID to its name eg. Deposited
