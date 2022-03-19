@@ -56,7 +56,7 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 				continue // no need to query yet
 			}
 			q.ToBlock = toBigInt(toBlk)
-
+			// call m.ec.FilterLogs and skip already logs before savedLogID, if savedLogID is nil, return all received logs
 			todoLogs := m.doOneQuery(q, key, savedLogID)
 			// now go over todoLogs and call callback func
 			// it's possible all have been skipped so we don't do anything
@@ -68,8 +68,8 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 				cbfn(topicEvMap[elog.Topics[0]], elog)
 			}
 
-			// if len(todoLogs) > 0, we've handled new logs, should update db and next fromBlock,
 			var nextFrom uint64
+			// if len(todoLogs) > 0, we've handled new logs, should update db and next fromBlock,
 			if len(todoLogs) > 0 {
 				// last handled log's blknum + 1, we don't move to toBlock in case there are inconsistency
 				// between nodes, so handled log blk+1 will guarantee no miss event
@@ -119,6 +119,9 @@ func (m *Monitor) doOneQuery(q *ethereum.FilterQuery, key string, savedLogID *Lo
 	logs, err := m.ec.FilterLogs(context.TODO(), *q)
 	if err != nil {
 		log.Warnln(key, "getlogs failed. err:", err)
+	}
+	if len(logs) == 0 {
+		return logs
 	}
 	// if resume from db and on first ticker, as fromblock is same as db, we may get same events again
 	// how many logs should be skipped, only could be non-zero if savedLogID isn't nil
