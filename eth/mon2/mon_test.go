@@ -18,6 +18,23 @@ func chkEq(v, exp interface{}, t *testing.T) {
 	}
 }
 
+// todo: test doOneQuery filter logs correctly w/ different savedLogID
+func TestInitFromInQ(t *testing.T) {
+	dal := make(MockDAL)
+	expLog := LogEventID{100, 10}
+	dal["somekey"] = expLog
+	m := &Monitor{
+		dal: dal,
+	}
+	q := &ethereum.FilterQuery{
+		FromBlock: new(big.Int), // will be changed in initFromInQ
+	}
+	saved := m.initFromInQ(q, "somekey")
+	chkEq(q.FromBlock.Uint64(), expLog.BlkNum, t)
+	chkEq(saved.BlkNum, expLog.BlkNum, t)
+	chkEq(saved.Index, expLog.Index, t)
+}
+
 func TestCalcToBlkNum(t *testing.T) {
 	// tdata is array of test input and expected result
 	// each row is one case, with 5 uint64, they are m.blkNum, cfg.BlkDelay and MaxBlkDelta
@@ -95,7 +112,6 @@ func TestFilterQuery(t *testing.T) {
 	chkEq(len(ec.expTo), 0, t)
 	// exit MonAddr loop
 	m.Close()
-
 }
 
 // mock eth client
