@@ -106,7 +106,7 @@ func (m *Monitor) CalcToBlkNum(from uint64) uint64 {
 	}
 	toBlkNum := curBlkNum - m.cfg.BlkDelay
 	// if rpc limits how many blocks we can query, don't exceed it
-	if m.cfg.MaxBlkDelta > 0 && toBlkNum-from > m.cfg.MaxBlkDelta {
+	if m.cfg.MaxBlkDelta > 0 && toBlkNum > from+m.cfg.MaxBlkDelta {
 		toBlkNum = from + m.cfg.MaxBlkDelta
 	}
 	return toBlkNum
