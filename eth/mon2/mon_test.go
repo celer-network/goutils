@@ -148,8 +148,8 @@ func TestFilterQuery(t *testing.T) {
 	chkEq(len(ec.expFrom), 0, t)
 	chkEq(len(ec.expTo), 0, t)
 	// check dal has correct fromblk/index, as last query has no logs, it should be CalcNextFromBlkNum
-	chkEq(dal[zeroKey].BlkNum, 95, t)
-	chkEq(dal[zeroKey].Index, -1, t)
+	chkEq(dal[zeroKey].BlkNum, uint64(95), t)
+	chkEq(dal[zeroKey].Index, int64(-1), t)
 }
 
 // mock eth client
