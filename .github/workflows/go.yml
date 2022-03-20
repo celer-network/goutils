@@ -34,5 +34,6 @@ jobs:
       run: |
         go test github.com/celer-network/goutils/lrucache
         go test github.com/celer-network/goutils/kaf
+        go test github.com/celer-network/goutils/eth/mon2
         go test github.com/celer-network/goutils/eth/monitor
         go test github.com/celer-network/goutils/eth/watcher

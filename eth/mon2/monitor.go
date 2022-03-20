@@ -45,7 +45,7 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 	for {
 		select {
 		case <-m.quit:
-			log.Info("MonAddr:", key, "quit")
+			log.Infoln("MonAddr:", key, "quit")
 			return
 
 		case <-ticker.C:
@@ -57,7 +57,7 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 			}
 			q.ToBlock = toBigInt(toBlk)
 			// call m.ec.FilterLogs and skip already logs before savedLogID, if savedLogID is nil, return all received logs
-			todoLogs := m.doOneQuery(q, key, savedLogID)
+			todoLogs := m.doOneQuery(q, savedLogID)
 			// now go over todoLogs and call callback func
 			// it's possible all have been skipped so we don't do anything
 			for _, elog := range todoLogs {
@@ -115,10 +115,10 @@ func (m *Monitor) initFromInQ(q *ethereum.FilterQuery, key string) *LogEventID {
 }
 
 // calls FilterLogs and skip already processed
-func (m *Monitor) doOneQuery(q *ethereum.FilterQuery, key string, savedLogID *LogEventID) []types.Log {
+func (m *Monitor) doOneQuery(q *ethereum.FilterQuery, savedLogID *LogEventID) []types.Log {
 	logs, err := m.ec.FilterLogs(context.TODO(), *q)
 	if err != nil {
-		log.Warnln(key, "getlogs failed. err:", err)
+		log.Warnln(m.chainId, q.Addresses[0].Hex(), "getlogs failed. err:", err, "query fromBlk:", q.FromBlock, "toBlk:", q.ToBlock)
 	}
 	if len(logs) == 0 {
 		return logs

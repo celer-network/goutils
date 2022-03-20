@@ -11,6 +11,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
+var zeroHash common.Hash
+
+const zeroKey = "0-0000000000000000000000000000000000000000"
+
 // only scalar types
 func chkEq(v, exp interface{}, t *testing.T) {
 	if v != exp {
@@ -18,21 +22,50 @@ func chkEq(v, exp interface{}, t *testing.T) {
 	}
 }
 
-// todo: test doOneQuery filter logs correctly w/ different savedLogID
+func TestDoOneQuery(t *testing.T) {
+	ec := new(MockEc)
+	m := &Monitor{
+		ec: ec,
+	}
+	q := &ethereum.FilterQuery{
+		FromBlock: toBigInt(50),
+		ToBlock:   toBigInt(80),
+	}
+	saved := &LogEventID{50, 10}
+	// first 2 logs should be skipped
+	ec.addLog(50, 2)
+	ec.addLog(50, 10)
+	ec.addLog(60, 1)
+	gotLogs := m.doOneQuery(q, saved)
+	chkEq(len(gotLogs), 1, t)
+	chkEq(gotLogs[0].BlockNumber, uint64(60), t)
+	chkEq(gotLogs[0].Index, uint(1), t)
+}
+
+// resume from db saved event, or use blknum
 func TestInitFromInQ(t *testing.T) {
 	dal := make(MockDAL)
 	expLog := LogEventID{100, 10}
-	dal["somekey"] = expLog
+	dbkey := "key1"
+	dal[dbkey] = expLog
 	m := &Monitor{
-		dal: dal,
+		dal:    dal,
+		blkNum: 123,
 	}
 	q := &ethereum.FilterQuery{
 		FromBlock: new(big.Int), // will be changed in initFromInQ
 	}
-	saved := m.initFromInQ(q, "somekey")
+	saved := m.initFromInQ(q, dbkey)
 	chkEq(q.FromBlock.Uint64(), expLog.BlkNum, t)
 	chkEq(saved.BlkNum, expLog.BlkNum, t)
 	chkEq(saved.Index, expLog.Index, t)
+	// not found in db, use m.blkNum case
+	dbkey = "key2"
+	saved = m.initFromInQ(q, dbkey)
+	if saved != nil {
+		t.Error("expect nil to be returned by initFromInQ, but got: ", saved)
+	}
+	chkEq(q.FromBlock.Uint64(), m.blkNum, t)
 }
 
 func TestCalcToBlkNum(t *testing.T) {
@@ -96,22 +129,27 @@ func TestFilterQuery(t *testing.T) {
 		BlkIntv:  time.Minute, // we'll manually call updateBlkNum
 		BlkDelay: 5,
 	})
+	defer m.Close()
 	chkIntv := time.Millisecond // increase this if test err on slow/busy machine
 	go m.MonAddr(PerAddrCfg{
 		ChkIntv: chkIntv,
 		FromBlk: 50, // explicit set, will take effect
 	}, func(string, types.Log) {})
-	// when ec.FilterLogs gets called, q.From should be 50, to should be 100-5
-	ec.expFrom = append(ec.expFrom, 50)
-	ec.expTo = append(ec.expTo, 95) // 95 = 100 - 5
-	// twice time to ensure MonAddr ticker triggers
-	// note it may triggers more than once
-	time.Sleep(2 * chkIntv)
+
+	ec.addLog(75, 10) // one log at blk 75
+	// when ec.FilterLogs first gets called, q.From should be 50, q.To should be 100-5
+	// one log at 75, so next from is 76
+	ec.expFrom = append(ec.expFrom, 50, 76, 95)
+	ec.expTo = append(ec.expTo, 95, 95, 95) // 95 = 100 - 5
+
+	// enough time to ensure MonAddr ticker triggers several times
+	time.Sleep(time.Duration(len(ec.expFrom)+1) * chkIntv)
 	// make sure expFrom/expTo are empty now, meaning FilterLogs has been calld
 	chkEq(len(ec.expFrom), 0, t)
 	chkEq(len(ec.expTo), 0, t)
-	// exit MonAddr loop
-	m.Close()
+	// check dal has correct fromblk/index, as last query has no logs, it should be CalcNextFromBlkNum
+	chkEq(dal[zeroKey].BlkNum, 95, t)
+	chkEq(dal[zeroKey].Index, -1, t)
 }
 
 // mock eth client
@@ -180,11 +218,10 @@ func (ec *MockEc) addLog(blkNum uint64, idx uint) {
 }
 
 func newLog(blkNum uint64, idx uint) types.Log {
-	var fakeTopic common.Hash
 	return types.Log{
 		BlockNumber: blkNum,
 		Index:       idx,
-		Topics:      []common.Hash{fakeTopic},
+		Topics:      []common.Hash{zeroHash},
 	}
 }
 
