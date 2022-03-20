@@ -54,3 +54,5 @@ type PerAddrCfg struct {
 	FromBlk uint64         // optional. if > 0, means ignore persisted blocknum and use this for FromBlk in queries, don't set unless you know what you're doing
 }
 ```
+## Duplicated events
+If program terminates/crashes while calling callback functions to handle event, there is no way for monitor code to know if the event has been processed. So to be on the safer side, on restart we'll fetch logs from last persisted blocknum and skip logs before persisted log index. This means callback may receive same event again. **Application should have its own de-dup logic to ignore already processed events.**
