@@ -103,7 +103,7 @@ func (m *Monitor) initFromInQ(q *ethereum.FilterQuery, key string) *LogEventID {
 	// try resume from last saved block and log idx
 	blockNum, blockIdx, found, err := m.dal.GetMonitorBlock(key)
 	if err == nil && found {
-		q.FromBlock.SetUint64(blockNum)
+		q.FromBlock = toBigInt(blockNum)
 		return &LogEventID{
 			BlkNum: blockNum,
 			Index:  blockIdx, // this may be -1 in fast forward case
