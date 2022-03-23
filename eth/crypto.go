@@ -5,13 +5,13 @@ package eth
 import (
 	"crypto/ecdsa"
 	"encoding/hex"
+	"errors"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -93,7 +93,7 @@ func IsSignatureValid(signer common.Address, data []byte, sig []byte) bool {
 
 func RecoverSigner(data []byte, sig []byte) (common.Address, error) {
 	if len(sig) != 65 {
-		return common.Address{}, secp256k1.ErrInvalidSignatureLen
+		return common.Address{}, errors.New("invalid signature length")
 	}
 
 	// clone one to use, to make sure the original sig won't be changed by me
