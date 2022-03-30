@@ -25,6 +25,16 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 		Addresses: []common.Address{cfg.Addr},
 	}
 
+	// populate topic filters
+	q.Topics = make([][]common.Hash, len(cfg.Topics))
+	for i, t := range cfg.Topics {
+		if t != common.HexToHash("0x0") {
+			q.Topics[i] = []common.Hash{t}
+		} else {
+			q.Topics[i] = []common.Hash{}
+		}
+	}
+
 	// savedLogID is only non-nil if we are resuming from db blockNum and blockIdx, used to skip
 	// already processed events on the same block
 	var savedLogID *LogEventID

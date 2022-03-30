@@ -49,6 +49,7 @@ type PerAddrCfg struct {
 	ChkIntv time.Duration  // interval to call FilterLogs
 	AbiStr  string         // XxxABI or XxxMetaData.ABI abi string from this contract's go binding, needed to match log topic to event name, if empty string, evname in callback is also empty
 	FromBlk uint64         // optional. if > 0, means ignore persisted blocknum and use this for FromBlk in queries, don't set unless you know what you're doing
+	Topics  [5]common.Hash // optional. topic filters. position sensitive. keccak256 hashed values
 }
 
 type Monitor struct {
