@@ -23,16 +23,7 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 	// q has no topics to receive all events from this address
 	q := &ethereum.FilterQuery{
 		Addresses: []common.Address{cfg.Addr},
-	}
-
-	// populate topic filters
-	q.Topics = make([][]common.Hash, len(cfg.Topics))
-	for i, t := range cfg.Topics {
-		if t != common.HexToHash("0x0") {
-			q.Topics[i] = []common.Hash{t}
-		} else {
-			q.Topics[i] = []common.Hash{}
-		}
+		Topics:    cfg.Topics,
 	}
 
 	// savedLogID is only non-nil if we are resuming from db blockNum and blockIdx, used to skip
