@@ -221,9 +221,7 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 	if err != nil {
 		return fmt.Errorf("failed to call HeaderByNumber: %w", err)
 	}
-	send1559Tx := false
 	if head.BaseFee != nil && !hasLegacyFlags {
-		send1559Tx = true
 		err = determine1559GasPrice(ctx, signer, txopts, client, head)
 		if err != nil {
 			return fmt.Errorf("failed to determine EIP-1559 gas price: %w", err)
@@ -249,29 +247,8 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 			return fmt.Errorf("tx dry-run err: %w", err)
 		}
 		signer.NoSend = false
-		var typesMsg types.Message
-		londonSigner := types.NewLondonSigner(t.chainId)
-		if send1559Tx {
-			typesMsg, err = dryTx.AsMessage(londonSigner, head.BaseFee)
-		} else {
-			typesMsg, err = dryTx.AsMessage(londonSigner, nil)
-		}
-		if err != nil {
-			return fmt.Errorf("failed to get typesMsg: %w", err)
-		}
-		callMsg := ethereum.CallMsg{
-			From:     typesMsg.From(),
-			To:       typesMsg.To(),
-			GasPrice: typesMsg.GasPrice(),
-			Value:    typesMsg.Value(),
-			Data:     typesMsg.Data(),
-		}
-		estimatedGas, err := client.EstimateGas(ctx, callMsg)
-		if err != nil {
-			return fmt.Errorf("failed to call EstimateGas: %w", err)
-		}
 		// 2.2. Multiply gas limit by the configured ratio
-		signer.GasLimit = uint64(float64(estimatedGas) * (1 + txopts.addGasEstimateRatio))
+		signer.GasLimit = uint64(float64(dryTx.Gas()) * (1 + txopts.addGasEstimateRatio))
 	}
 	// If addGasEstimateRatio not specified, just defer to go-ethereum for gas limit estimation
 	return nil
