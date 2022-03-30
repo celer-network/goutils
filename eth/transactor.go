@@ -29,7 +29,7 @@ var (
 	ErrExceedMaxGas        = errors.New("suggested gas price exceeds max allowed")
 	ErrConflictingGasFlags = errors.New("cannot specify both legacy and EIP-1559 gas flags")
 
-	ctxTimeout = 3 * time.Second
+	ctxTimeout = 10 * time.Second
 )
 
 type Transactor struct {
