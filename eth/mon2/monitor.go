@@ -20,7 +20,6 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 	// needed to provide evname to callback func
 	topicEvMap := EventIDMap(cfg.AbiStr)
 
-	// q has no topics to receive all events from this address
 	q := &ethereum.FilterQuery{
 		Addresses: []common.Address{cfg.Addr},
 		Topics:    cfg.Topics,
