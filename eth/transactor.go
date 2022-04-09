@@ -163,14 +163,14 @@ func (t *Transactor) transact(
 				strings.Contains(errStr, parityErrIncrementNonce) {
 				nonce++
 			} else {
-				return nil, fmt.Errorf("TxMethod err: %w", err)
+				return nil, fmt.Errorf("TxMethod err: %w. nonce %s", err, signer.Nonce)
 			}
 		} else {
 			t.sentTx = true
+			logmsg := fmt.Sprintf("Tx sent %x chain %s nonce %d gas %s", tx.Hash(), t.chainId, nonce, printGasGwei(signer))
 			if handler != nil {
 				go func() {
-					txHash := tx.Hash().Hex()
-					log.Debugf("Waiting for tx %s to be mined, chain %s nonce %d", txHash, t.chainId, nonce)
+					log.Debugf("%s, wait to be mined", logmsg)
 					receipt, err := WaitMined(
 						context.Background(), client, tx,
 						WithBlockDelay(txopts.blockDelay),
@@ -192,12 +192,14 @@ func (t *Transactor) transact(
 						}
 						return
 					}
-					log.Debugf("Tx %s mined, status %d, chain %s, gas estimate %d, gas used %d",
-						txHash, receipt.Status, t.chainId, tx.Gas(), receipt.GasUsed)
+					log.Debugf("Tx mined %x, status %d, chain %s, gas limit %d used %d",
+						tx.Hash(), receipt.Status, t.chainId, tx.Gas(), receipt.GasUsed)
 					if handler.OnMined != nil {
 						handler.OnMined(receipt)
 					}
 				}()
+			} else {
+				log.Debug(logmsg)
 			}
 			t.nonce = nonce
 			return tx, nil
@@ -298,6 +300,23 @@ func determineLegacyGasPrice(
 	}
 	signer.GasPrice = gasPrice
 	return nil
+}
+
+func printGasGwei(signer *bind.TransactOpts) string {
+	if signer.GasPrice == nil && signer.GasFeeCap == nil && signer.GasTipCap == nil {
+		return "auto"
+	}
+	res := ""
+	if signer.GasPrice != nil && signer.GasPrice.Sign() > 0 {
+		res += fmt.Sprintf("price %d ", signer.GasPrice.Uint64()/1e9)
+	}
+	if signer.GasFeeCap != nil && signer.GasFeeCap.Sign() > 0 {
+		res += fmt.Sprintf("feecap %d ", signer.GasFeeCap.Uint64()/1e9)
+	}
+	if signer.GasTipCap != nil && signer.GasTipCap.Sign() > 0 {
+		res += fmt.Sprintf("tipcap %d ", signer.GasTipCap.Uint64()/1e9)
+	}
+	return strings.TrimSpace(res)
 }
 
 func (t *Transactor) ContractCaller() bind.ContractCaller {
