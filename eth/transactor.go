@@ -26,7 +26,6 @@ const (
 )
 
 var (
-	ErrExceedMaxGas        = errors.New("suggested gas price exceeds max allowed")
 	ErrConflictingGasFlags = errors.New("cannot specify both legacy and EIP-1559 gas flags")
 
 	ctxTimeout = 10 * time.Second
@@ -292,10 +291,10 @@ func determineLegacyGasPrice(
 	}
 	if txopts.maxGasGwei > 0 { // maxGas 0 means no cap on gas price
 		maxPrice := new(big.Int).SetUint64(txopts.maxGasGwei * 1e9)
-		// GasPrice is larger than allowed cap, return error
+		// GasPrice is larger than allowed cap, use maxPrice but log warning
 		if maxPrice.Cmp(gasPrice) < 0 {
 			log.Warnf("suggested gas price %s larger than cap %s", gasPrice, maxPrice)
-			return ErrExceedMaxGas
+			gasPrice = maxPrice
 		}
 	}
 	signer.GasPrice = gasPrice
