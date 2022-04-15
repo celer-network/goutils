@@ -44,6 +44,10 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 
 	for {
 		select {
+		case <-m.stopMon:
+			log.Infoln("MonAddr:", key, "stopped")
+			return
+
 		case <-m.quit:
 			log.Infoln("MonAddr:", key, "quit")
 			return

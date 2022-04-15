@@ -61,6 +61,8 @@ type Monitor struct {
 
 	lock sync.RWMutex // protect blkNum, can be also used to protect ec when later we support replace failed ec
 	quit chan bool    // this ch will close in m.Close so all loops know to exit
+	// support keep loopUpdateBlkNum running but stop all getLogs, needed for use case that monAddr when first start, then later knows no need, stop to save queries
+	stopMon chan bool
 }
 
 // cfg is not pointer to ensure value copy and avoid unexpected change by other code
@@ -80,13 +82,20 @@ func NewMonitor(ec EthClient, dal DAL, cfg PerChainCfg) (*Monitor, error) {
 		chainId: chid.Uint64(),
 		blkNum:  blkNum,
 		quit:    make(chan bool),
+		stopMon: make(chan bool),
 	}
 	go m.loopUpdateBlkNum()
 	return m, nil
 }
 
+// Stops all MonAddr and updating blk num to release all resources. No longer usable after this call
 func (m *Monitor) Close() {
 	close(m.quit)
+}
+
+// StopMon will quit all MonAddr loops, but keep updating blk num.
+func (m *Monitor) StopMon() {
+	close(m.stopMon)
 }
 
 // return cached block number from last BlockNumber call, no rpc, return in memory value directly
