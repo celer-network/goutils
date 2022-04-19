@@ -122,7 +122,7 @@ func (m *Monitor) initFromInQ(q *ethereum.FilterQuery, key string) *LogEventID {
 func (m *Monitor) doOneQuery(q *ethereum.FilterQuery, savedLogID *LogEventID) []types.Log {
 	logs, err := m.ec.FilterLogs(context.TODO(), *q)
 	if err != nil {
-		log.Warnln(m.chainId, q.Addresses[0].Hex(), "getlogs failed. err:", err, "query fromBlk:", q.FromBlock, "toBlk:", q.ToBlock)
+		log.Warnf("%d-%x getLogs fromBlk %s toBlk %s failed. err: %s", m.chainId, q.Addresses[0], q.FromBlock, q.ToBlock, err)
 	}
 	if len(logs) == 0 {
 		return logs
