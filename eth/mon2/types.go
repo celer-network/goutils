@@ -143,7 +143,7 @@ func (m *Monitor) updateBlkNum() {
 	// don't lock upfront in case rpc takes long time
 	blkNum, err := m.ec.BlockNumber(context.Background())
 	if err != nil {
-		log.Warnf("chain %d get blknum err: %s", m.chainId, err)
+		log.Warnf("chain %d get blknum err: %v", m.chainId, err)
 		// todo: switch to backup ec
 		return
 	}
