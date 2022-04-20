@@ -160,7 +160,7 @@ func (m *Monitor) loopUpdateBlkNum() {
 	for {
 		select {
 		case <-m.quit:
-			log.Debugln("loopUpdateBlkNum: quit")
+			log.Debugf("chain %d loopUpdateBlkNum: quit", m.chainId)
 			return
 
 		case <-ticker.C:
