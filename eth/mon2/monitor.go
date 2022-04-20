@@ -126,6 +126,7 @@ func (m *Monitor) doOneQuery(q *ethereum.FilterQuery, savedLogID *LogEventID) ([
 	logs, err := m.ec.FilterLogs(context.TODO(), *q)
 	if err != nil {
 		log.Warnf("%d-%x getLogs fromBlk %s toBlk %s failed. err: %v", m.chainId, q.Addresses[0], q.FromBlock, q.ToBlock, err)
+		return nil, err
 	}
 	if len(logs) == 0 {
 		return logs, nil
