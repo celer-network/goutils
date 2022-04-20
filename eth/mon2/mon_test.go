@@ -2,6 +2,7 @@ package mon2
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"testing"
 	"time"
@@ -36,7 +37,7 @@ func TestDoOneQuery(t *testing.T) {
 	ec.addLog(50, 2)
 	ec.addLog(50, 10)
 	ec.addLog(60, 1)
-	gotLogs := m.doOneQuery(q, saved)
+	gotLogs, _ := m.doOneQuery(q, saved)
 	chkEq(len(gotLogs), 1, t)
 	chkEq(gotLogs[0].BlockNumber, uint64(60), t)
 	chkEq(gotLogs[0].Index, uint(1), t)
@@ -129,7 +130,6 @@ func TestFilterQuery(t *testing.T) {
 		BlkIntv:  time.Minute, // we'll manually call updateBlkNum
 		BlkDelay: 5,
 	})
-	defer m.Close()
 	chkIntv := time.Millisecond // increase this if test err on slow/busy machine
 	go m.MonAddr(PerAddrCfg{
 		ChkIntv: chkIntv,
@@ -144,12 +144,33 @@ func TestFilterQuery(t *testing.T) {
 
 	// enough time to ensure MonAddr ticker triggers several times
 	time.Sleep(time.Duration(len(ec.expFrom)+1) * chkIntv)
-	// make sure expFrom/expTo are empty now, meaning FilterLogs has been calld
+	// make sure expFrom/expTo are empty now, meaning FilterLogs has been called
 	chkEq(len(ec.expFrom), 0, t)
 	chkEq(len(ec.expTo), 0, t)
 	// check dal has correct fromblk/index, as last query has no logs, it should be CalcNextFromBlkNum
 	chkEq(dal[zeroKey].BlkNum, uint64(95), t)
 	chkEq(dal[zeroKey].Index, int64(-1), t)
+	m.Close() // done w/ first test case
+
+	// new monitor for FilterLog err case
+	ec.blkNum = 200
+	ec.flErr = errors.New("some FilterLog rpc error")
+	ec.expFrom = append(ec.expFrom, 95, 95)
+	ec.expTo = append(ec.expTo, 195, 195)
+	m, _ = NewMonitor(ec, dal, PerChainCfg{
+		BlkIntv:  time.Minute, // we'll manually call updateBlkNum
+		BlkDelay: 5,
+	})
+	go m.MonAddr(PerAddrCfg{
+		ChkIntv: chkIntv,
+	}, func(string, types.Log) {})
+	time.Sleep(time.Duration(len(ec.expFrom)+1) * chkIntv)
+	chkEq(len(ec.expFrom), 0, t)
+	chkEq(len(ec.expTo), 0, t)
+	// because FilterLog return err, no update in db
+	chkEq(dal[zeroKey].BlkNum, uint64(95), t)
+	chkEq(dal[zeroKey].Index, int64(-1), t)
+	m.Close() // done w/ first test case
 }
 
 // mock eth client
@@ -159,8 +180,10 @@ type MockEc struct {
 	// when FilterLogs is called, expected value for q.FromBlock and q.ToBlock
 	// will be popped in each call
 	expFrom, expTo []uint64
-	// logs to be returned in next FilterLogs call
+	// logs to be returned in next FilterLogs call (if flErr is nill)
 	logs []types.Log
+	// FilterLogs api err, if set non-nil, FilterLogs will return (nil, flErr) directly
+	flErr error
 }
 
 func (ec *MockEc) ChainID(ctx context.Context) (*big.Int, error) {
@@ -187,6 +210,9 @@ func (ec *MockEc) chkFromTo(qfrom, qto uint64) {
 
 func (ec *MockEc) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]types.Log, error) {
 	ec.chkFromTo(q.FromBlock.Uint64(), q.ToBlock.Uint64())
+	if ec.flErr != nil {
+		return nil, ec.flErr
+	}
 	var ret []types.Log
 	keep := ec.logs[:0] // share same backing array and capacity as ec.logs so can modify it in-place
 	for _, elog := range ec.logs {

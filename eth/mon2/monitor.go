@@ -61,7 +61,10 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 			}
 			q.ToBlock = toBigInt(toBlk)
 			// call m.ec.FilterLogs and skip already logs before savedLogID, if savedLogID is nil, return all received logs
-			todoLogs := m.doOneQuery(q, savedLogID)
+			todoLogs, err := m.doOneQuery(q, savedLogID)
+			if err != nil {
+				continue // keep same fromBlk and try again in next ticker, next to may be different
+			}
 			// now go over todoLogs and call callback func
 			// it's possible all have been skipped so we don't do anything
 			for _, elog := range todoLogs {
@@ -118,19 +121,20 @@ func (m *Monitor) initFromInQ(q *ethereum.FilterQuery, key string) *LogEventID {
 	return nil
 }
 
-// calls FilterLogs and skip already processed
-func (m *Monitor) doOneQuery(q *ethereum.FilterQuery, savedLogID *LogEventID) []types.Log {
+// calls FilterLogs and skip already processed log blk/idx, if FilterLogs returns non-nil err, return nil logs and err directly
+func (m *Monitor) doOneQuery(q *ethereum.FilterQuery, savedLogID *LogEventID) ([]types.Log, error) {
 	logs, err := m.ec.FilterLogs(context.TODO(), *q)
 	if err != nil {
 		log.Warnln(m.chainId, q.Addresses[0].Hex(), "getlogs failed. err:", err, "query fromBlk:", q.FromBlock, "toBlk:", q.ToBlock)
+		return nil, err
 	}
 	if len(logs) == 0 {
-		return logs
+		return logs, nil
 	}
 	// if resume from db and on first ticker, as fromblock is same as db, we may get same events again
 	// how many logs should be skipped, only could be non-zero if savedLogID isn't nil
 	// if savedLogID is nil, return 0 directly
-	return logs[savedLogID.CountSkip(logs):]
+	return logs[savedLogID.CountSkip(logs):], nil
 }
 
 // parse abi and return map from event.ID to its name eg. Deposited
