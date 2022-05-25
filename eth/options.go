@@ -29,6 +29,9 @@ type txOptions struct {
 	queryTimeout       time.Duration
 	queryRetryInterval time.Duration
 	dropDetection      bool
+
+	// Misc
+	pendingQueueSize uint64 // max number of tx waiting for pending status
 }
 
 const (
@@ -36,6 +39,7 @@ const (
 	defaultTxTimeout            = 6 * time.Hour
 	defaultTxQueryTimeout       = 2 * time.Minute
 	defaultTxQueryRetryInterval = 10 * time.Second
+	defaultPendingQueueSize     = 20
 )
 
 // do not return pointer here as defaultTxOptions is always deep copied when used
@@ -45,6 +49,7 @@ func defaultTxOptions() txOptions {
 		timeout:            defaultTxTimeout,
 		queryTimeout:       defaultTxQueryTimeout,
 		queryRetryInterval: defaultTxQueryRetryInterval,
+		pendingQueueSize:   defaultPendingQueueSize,
 	}
 }
 
@@ -161,5 +166,11 @@ func WithQueryRetryInterval(t time.Duration) TxOption {
 func WithDropDetection(d bool) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.dropDetection = d
+	})
+}
+
+func WithPendingQueueSize(n uint64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.pendingQueueSize = n
 	})
 }

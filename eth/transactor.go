@@ -147,6 +147,9 @@ func (t *Transactor) transact(
 	nonce := t.nonce
 	if pendingNonce > nonce || !t.sentTx {
 		nonce = pendingNonce
+	} else if nonce-pendingNonce > txopts.pendingQueueSize {
+		return nil, fmt.Errorf("too many txs waiting for pending status, nonce:%d pendingNonce:%d queueSize:%d",
+			nonce, pendingNonce, txopts.pendingQueueSize)
 	} else {
 		nonce++
 	}
