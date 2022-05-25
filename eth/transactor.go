@@ -27,6 +27,8 @@ const (
 
 var (
 	ErrConflictingGasFlags = errors.New("cannot specify both legacy and EIP-1559 gas flags")
+	ErrTooManyPendingTx    = errors.New("too many txs in pending status")
+	ErrTooManySubmittingTx = errors.New("too many txs in submitting status")
 
 	ctxTimeout = 10 * time.Second
 )
@@ -144,14 +146,25 @@ func (t *Transactor) transact(
 	if err != nil {
 		return nil, fmt.Errorf("PendingNonceAt err: %w", err)
 	}
+	if txopts.maxPendingTxNum > 0 {
+		accountNonce, err := t.client.NonceAt(context.Background(), t.address, nil)
+		if err != nil {
+			return nil, fmt.Errorf("NonceAt err: %w", err)
+		}
+		if pendingNonce-accountNonce >= txopts.maxPendingTxNum {
+			return nil, fmt.Errorf("%w, pendingNonce:%d accountNonce:%d limit:%d",
+				ErrTooManyPendingTx, pendingNonce, accountNonce, txopts.maxSubmittingTxNum)
+		}
+	}
 	nonce := t.nonce
 	if pendingNonce > nonce || !t.sentTx {
 		nonce = pendingNonce
-	} else if nonce-pendingNonce > txopts.pendingQueueSize {
-		return nil, fmt.Errorf("too many txs waiting for pending status, nonce:%d pendingNonce:%d queueSize:%d",
-			nonce, pendingNonce, txopts.pendingQueueSize)
 	} else {
 		nonce++
+	}
+	if txopts.maxSubmittingTxNum > 0 && nonce-pendingNonce >= txopts.maxSubmittingTxNum {
+		return nil, fmt.Errorf("%w, submittingNonce:%d pendingNonce:%d limit:%d",
+			ErrTooManySubmittingTx, nonce, pendingNonce, txopts.maxSubmittingTxNum)
 	}
 	for {
 		nonceInt := big.NewInt(0)
