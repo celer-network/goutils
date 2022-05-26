@@ -14,7 +14,7 @@ type txOptions struct {
 	minGasGwei   uint64
 	maxGasGwei   uint64
 	addGasGwei   uint64
-	forceGasGwei uint64
+	forceGasGwei *uint64
 	// EIP-1559 Tx gas price
 	maxFeePerGasGwei         uint64
 	maxPriorityFeePerGasGwei uint64
@@ -29,6 +29,10 @@ type txOptions struct {
 	queryTimeout       time.Duration
 	queryRetryInterval time.Duration
 	dropDetection      bool
+
+	// Pending tx control
+	maxPendingTxNum    uint64 // max number of tx in pending status (already in txpool)
+	maxSubmittingTxNum uint64 // max number of tx being submitted (not in txpool yet)
 }
 
 const (
@@ -92,7 +96,7 @@ func WithAddGasGwei(g uint64) TxOption {
 
 func WithForceGasGwei(g uint64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
-		o.forceGasGwei = g
+		o.forceGasGwei = &g
 	})
 }
 
@@ -161,5 +165,17 @@ func WithQueryRetryInterval(t time.Duration) TxOption {
 func WithDropDetection(d bool) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.dropDetection = d
+	})
+}
+
+func WithMaxPendingTxNum(n uint64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.maxPendingTxNum = n
+	})
+}
+
+func WithMaxSubmittingTxNum(n uint64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.maxSubmittingTxNum = n
 	})
 }

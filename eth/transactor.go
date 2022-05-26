@@ -27,6 +27,8 @@ const (
 
 var (
 	ErrConflictingGasFlags = errors.New("cannot specify both legacy and EIP-1559 gas flags")
+	ErrTooManyPendingTx    = errors.New("too many txs in pending status")
+	ErrTooManySubmittingTx = errors.New("too many txs in submitting status")
 
 	ctxTimeout = 10 * time.Second
 )
@@ -144,11 +146,25 @@ func (t *Transactor) transact(
 	if err != nil {
 		return nil, fmt.Errorf("PendingNonceAt err: %w", err)
 	}
+	if txopts.maxPendingTxNum > 0 {
+		accountNonce, err := t.client.NonceAt(context.Background(), t.address, nil)
+		if err != nil {
+			return nil, fmt.Errorf("NonceAt err: %w", err)
+		}
+		if pendingNonce-accountNonce >= txopts.maxPendingTxNum {
+			return nil, fmt.Errorf("%w, pendingNonce:%d accountNonce:%d limit:%d",
+				ErrTooManyPendingTx, pendingNonce, accountNonce, txopts.maxSubmittingTxNum)
+		}
+	}
 	nonce := t.nonce
 	if pendingNonce > nonce || !t.sentTx {
 		nonce = pendingNonce
 	} else {
 		nonce++
+	}
+	if txopts.maxSubmittingTxNum > 0 && nonce-pendingNonce >= txopts.maxSubmittingTxNum {
+		return nil, fmt.Errorf("%w, submittingNonce:%d pendingNonce:%d limit:%d",
+			ErrTooManySubmittingTx, nonce, pendingNonce, txopts.maxSubmittingTxNum)
 	}
 	for {
 		nonceInt := big.NewInt(0)
@@ -210,7 +226,7 @@ func (t *Transactor) transact(
 func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
 	// 1. Determine gas price
 	// Only accept legacy flags or EIP-1559 flags, not both
-	hasLegacyFlags := txopts.forceGasGwei > 0 || txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
+	hasLegacyFlags := txopts.forceGasGwei != nil || txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
 	has1559Flags := txopts.maxFeePerGasGwei > 0 || txopts.maxPriorityFeePerGasGwei > 0
 	if hasLegacyFlags && has1559Flags {
 		return ErrConflictingGasFlags
@@ -270,8 +286,8 @@ func determine1559GasPrice(
 // determineLegacyGasPrice sets the gas price on the signer based on the legacy fee model
 func determineLegacyGasPrice(
 	ctx context.Context, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
-	if txopts.forceGasGwei > 0 {
-		signer.GasPrice = new(big.Int).SetUint64(txopts.forceGasGwei * 1e9)
+	if txopts.forceGasGwei != nil {
+		signer.GasPrice = new(big.Int).SetUint64(*txopts.forceGasGwei * 1e9)
 		return nil
 	}
 	gasPrice, err := client.SuggestGasPrice(context.Background())
