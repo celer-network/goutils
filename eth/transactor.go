@@ -226,7 +226,7 @@ func (t *Transactor) transact(
 func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
 	// 1. Determine gas price
 	// Only accept legacy flags or EIP-1559 flags, not both
-	hasLegacyFlags := txopts.forceGasGwei > 0 || txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
+	hasLegacyFlags := txopts.forceGasGwei != nil || txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
 	has1559Flags := txopts.maxFeePerGasGwei > 0 || txopts.maxPriorityFeePerGasGwei > 0
 	if hasLegacyFlags && has1559Flags {
 		return ErrConflictingGasFlags
@@ -286,8 +286,8 @@ func determine1559GasPrice(
 // determineLegacyGasPrice sets the gas price on the signer based on the legacy fee model
 func determineLegacyGasPrice(
 	ctx context.Context, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
-	if txopts.forceGasGwei > 0 {
-		signer.GasPrice = new(big.Int).SetUint64(txopts.forceGasGwei * 1e9)
+	if txopts.forceGasGwei != nil {
+		signer.GasPrice = new(big.Int).SetUint64(*txopts.forceGasGwei * 1e9)
 		return nil
 	}
 	gasPrice, err := client.SuggestGasPrice(context.Background())

@@ -14,7 +14,7 @@ type txOptions struct {
 	minGasGwei   uint64
 	maxGasGwei   uint64
 	addGasGwei   uint64
-	forceGasGwei uint64
+	forceGasGwei *uint64
 	// EIP-1559 Tx gas price
 	maxFeePerGasGwei         uint64
 	maxPriorityFeePerGasGwei uint64
@@ -96,7 +96,7 @@ func WithAddGasGwei(g uint64) TxOption {
 
 func WithForceGasGwei(g uint64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
-		o.forceGasGwei = g
+		o.forceGasGwei = &g
 	})
 }
 
