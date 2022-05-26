@@ -4,7 +4,10 @@ package eth
 
 import (
 	"math/big"
+	"strconv"
 	"time"
+
+	"github.com/celer-network/goutils/log"
 )
 
 type txOptions struct {
@@ -14,7 +17,7 @@ type txOptions struct {
 	minGasGwei   uint64
 	maxGasGwei   uint64
 	addGasGwei   uint64
-	forceGasGwei *uint64
+	forceGasGwei *uint64 // use pointer to allow forcing zero gas
 	// EIP-1559 Tx gas price
 	maxFeePerGasGwei         uint64
 	maxPriorityFeePerGasGwei uint64
@@ -94,9 +97,15 @@ func WithAddGasGwei(g uint64) TxOption {
 	})
 }
 
-func WithForceGasGwei(g uint64) TxOption {
+func WithForceGasGwei(g string) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
-		o.forceGasGwei = &g
+		if g != "" {
+			gwei, err := strconv.ParseUint(g, 10, 64)
+			if err != nil {
+				log.Errorln("invalid ForceGasGwei", g)
+			}
+			o.forceGasGwei = &gwei
+		}
 	})
 }
 
