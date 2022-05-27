@@ -103,6 +103,7 @@ func WithForceGasGwei(g string) TxOption {
 			gwei, err := strconv.ParseUint(g, 10, 64)
 			if err != nil {
 				log.Errorln("invalid ForceGasGwei", g)
+				return
 			}
 			o.forceGasGwei = &gwei
 		}

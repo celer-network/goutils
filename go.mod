@@ -6,7 +6,7 @@ require (
 	github.com/allegro/bigcache v1.2.1 // indirect
 	github.com/aws/aws-sdk-go v1.41.15
 	github.com/cespare/cp v1.1.1 // indirect
-	github.com/ethereum/go-ethereum v1.10.16
+	github.com/ethereum/go-ethereum v1.10.18
 	github.com/frankban/quicktest v1.7.2 // indirect
 	github.com/gballet/go-libpcsclite v0.0.0-20191108122812-4678299bea08 // indirect
 	github.com/go-kit/kit v0.9.0 // indirect
