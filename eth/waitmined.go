@@ -130,6 +130,14 @@ func waitTxConfirmed(
 		}
 	}
 	// wait for enough block confirmations
+	// zksync violates eth rpc spec and blocknumber is nil in receipt, we replace w/ chain's current blknum
+	if receipt.BlockNumber == nil {
+		curBlkNum, blkNumErr := ec.BlockNumber(ctx)
+		if blkNumErr != nil { // don't retry blocknumber error as it's basic rpc
+			return receipt, fmt.Errorf("tx %x get BlockNumber err: %w", txHash, blkNumErr)
+		}
+		receipt.BlockNumber = new(big.Int).SetUint64(curBlkNum)
+	}
 	confirmBlk := new(big.Int).Add(receipt.BlockNumber, new(big.Int).SetUint64(opts.blockDelay))
 	var header *types.Header
 	for {
