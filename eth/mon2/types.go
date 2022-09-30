@@ -129,7 +129,11 @@ func (m *Monitor) CalcNextFromBlkNum(lastFrom, lastTo uint64) uint64 {
 	// for some chain we've seen if lastTo is close to blknum, events may be missing coudl be due to
 	// latest state are still inconsisten among nodes. so minus ForwardBlkDelay will help
 	if ret+m.cfg.ForwardBlkDelay+m.cfg.BlkDelay >= m.GetBlkNum() {
-		ret -= m.cfg.ForwardBlkDelay
+		if ret >= m.cfg.ForwardBlkDelay {
+			ret -= m.cfg.ForwardBlkDelay
+		} else {
+			ret = 0
+		}
 	}
 	if ret < lastFrom {
 		return lastFrom
