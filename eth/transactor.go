@@ -275,7 +275,7 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 func determine1559GasPrice(
 	ctx context.Context, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client, head *types.Header) error {
 	if txopts.maxPriorityFeePerGasGwei > 0 {
-		signer.GasTipCap = new(big.Int).SetUint64(txopts.maxPriorityFeePerGasGwei * 1e9)
+		signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.maxPriorityFeePerGasGwei * 1e9))
 	}
 	if txopts.maxFeePerGasGwei > 0 {
 		signer.GasFeeCap = new(big.Int).SetUint64(txopts.maxFeePerGasGwei * 1e9)
