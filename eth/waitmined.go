@@ -13,6 +13,7 @@ import (
 	"github.com/celer-network/goutils/log"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 )
@@ -61,11 +62,11 @@ func waitMined(
 	var txSender common.Address
 	if tx != nil {
 		txHash = tx.Hash()
-		msg, err := tx.AsMessage(types.NewLondonSigner(tx.ChainId()), big.NewInt(0))
+		msg, err := core.TransactionToMessage(tx, types.NewLondonSigner(tx.ChainId()), big.NewInt(0))
 		if err != nil {
 			return nil, fmt.Errorf("AsMessage err: %w", err)
 		}
-		txSender = msg.From()
+		txSender = msg.From
 	}
 	receipt, err := waitTxConfirmed(ctx, ec, tx, txSender, txHash, &txopts)
 	for errors.Is(err, ErrTxReorg) { // retry if dropped due to chain reorg

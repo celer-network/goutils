@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -174,7 +175,7 @@ func (t *Transactor) transact(
 		if err != nil {
 			errStr := err.Error()
 			if errStr == core.ErrNonceTooLow.Error() ||
-				errStr == core.ErrReplaceUnderpriced.Error() ||
+				errStr == txpool.ErrReplaceUnderpriced.Error() ||
 				strings.Contains(errStr, parityErrIncrementNonce) {
 				nonce++
 			} else {
