@@ -157,7 +157,7 @@ func (t *Transactor) transact(
 		}
 	}
 	nonce := t.nonce
-	if pendingNonce > nonce || !t.sentTx {
+	if pendingNonce > nonce || !t.sentTx || txopts.maxSubmittingTxNum == 1 {
 		nonce = pendingNonce
 	} else {
 		nonce++
