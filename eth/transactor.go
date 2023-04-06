@@ -154,7 +154,7 @@ func (t *Transactor) transact(
 		}
 		if pendingNonce-accountNonce >= txopts.maxPendingTxNum {
 			return nil, fmt.Errorf("%w, pendingNonce:%d accountNonce:%d limit:%d",
-				ErrTooManyPendingTx, pendingNonce, accountNonce, txopts.maxSubmittingTxNum)
+				ErrTooManyPendingTx, pendingNonce, accountNonce, txopts.maxPendingTxNum)
 		}
 	}
 	nonce := t.nonce
