@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/celer-network/goutils/log"
@@ -65,14 +66,40 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 			if err != nil {
 				continue // keep same fromBlk and try again in next ticker, next to may be different
 			}
-			// now go over todoLogs and call callback func
-			// it's possible all have been skipped so we don't do anything
-			for _, elog := range todoLogs {
-				if elog.Removed {
-					log.Debugln("skip removed log:", key, elog.BlockNumber, elog.Index)
-					continue
+			if len(todoLogs) > 200 {
+				// start with 5 go routines
+				batchSize := len(todoLogs) / 5
+				var wg sync.WaitGroup
+				for i := 0; i < 5; i++ {
+					wg.Add(1)
+					go func(j int) {
+						defer wg.Done()
+						var todoLogsTmp []types.Log
+						if j < 4 {
+							todoLogsTmp = todoLogs[j*batchSize : (j+1)*batchSize]
+						} else {
+							todoLogsTmp = todoLogs[j*batchSize:]
+						}
+						for _, elog := range todoLogsTmp {
+							if elog.Removed {
+								log.Debugln("skip removed log:", key, elog.BlockNumber, elog.Index)
+								continue
+							}
+							cbfn(topicEvMap[elog.Topics[0]], elog)
+						}
+					}(i)
 				}
-				cbfn(topicEvMap[elog.Topics[0]], elog)
+				wg.Wait()
+			} else {
+				// now go over todoLogs and call callback func
+				// it's possible all have been skipped so we don't do anything
+				for _, elog := range todoLogs {
+					if elog.Removed {
+						log.Debugln("skip removed log:", key, elog.BlockNumber, elog.Index)
+						continue
+					}
+					cbfn(topicEvMap[elog.Topics[0]], elog)
+				}
 			}
 
 			var nextFrom uint64
