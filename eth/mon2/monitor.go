@@ -66,16 +66,16 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 			if err != nil {
 				continue // keep same fromBlk and try again in next ticker, next to may be different
 			}
-			if len(todoLogs) > 200 {
-				// start with 5 go routines
-				batchSize := len(todoLogs) / 5
+			if len(todoLogs) > 500 {
+				// start with 10 go routines
+				batchSize := len(todoLogs) / 10
 				var wg sync.WaitGroup
-				for i := 0; i < 5; i++ {
+				for i := 0; i < 10; i++ {
 					wg.Add(1)
 					go func(j int) {
 						defer wg.Done()
 						var todoLogsTmp []types.Log
-						if j < 4 {
+						if j < 9 {
 							todoLogsTmp = todoLogs[j*batchSize : (j+1)*batchSize]
 						} else {
 							todoLogsTmp = todoLogs[j*batchSize:]
