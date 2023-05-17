@@ -12,13 +12,12 @@ import (
 )
 
 func TestTransactor_RawTransact(t *testing.T) {
-	ec, err := ethclient.Dial("https://rpc.ankr.com/eth_goerli")
-	check(err)
+	ec, _ := ethclient.Dial("https://rpc.ankr.com/eth_goerli")
 
 	ping := decodeAddr("0x5d5e863d0338f95c1d3b10846ac120ba27a2a264")
 	acc := decodeAddr("0x9532f934EfcE6c4Bf5BA078b25fDd81a780FBdfB")
-	signer, err := NewSigner("4e6b79814cc0a257f55f1b5c32a183e8600aa6992b4e5712046d41e56e06d696", big.NewInt(5))
-	check(err)
+	// uses a disposable public account
+	signer, _ := NewSigner("4e6b79814cc0a257f55f1b5c32a183e8600aa6992b4e5712046d41e56e06d696", big.NewInt(5))
 
 	calldata := hexutil.MustDecode("0x3adb191b000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000033132330000000000000000000000000000000000000000000000000000000000") // 123
 
