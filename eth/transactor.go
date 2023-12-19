@@ -253,22 +253,21 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 	}
 
 	// 2. Determine gas limit
+	// 2.1 Always dry-run the tx
+	signer.NoSend = true
+	dryTx, err := method(client, signer)
+	if err != nil {
+		return fmt.Errorf("tx dry-run err: %w", err)
+	}
+	signer.NoSend = false
+	// 2.2 Set the gas limit
 	if txopts.gasLimit > 0 {
 		// Use the specified limit if set
 		signer.GasLimit = txopts.gasLimit
-		return nil
-	} else if txopts.addGasEstimateRatio > 0.0 {
-		// 2.1. Estimate gas
-		signer.NoSend = true
-		dryTx, err := method(client, signer)
-		if err != nil {
-			return fmt.Errorf("tx dry-run err: %w", err)
-		}
-		signer.NoSend = false
-		// 2.2. Multiply gas limit by the configured ratio
+	} else {
+		// Use estimiated gas limit multiplied by the configured ratio
 		signer.GasLimit = uint64(float64(dryTx.Gas()) * (1 + txopts.addGasEstimateRatio))
 	}
-	// If addGasEstimateRatio not specified, just defer to go-ethereum for gas limit estimation
 	return nil
 }
 
