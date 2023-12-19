@@ -268,6 +268,9 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 		// Use estimiated gas limit multiplied by the configured ratio
 		signer.GasLimit = uint64(float64(dryTx.Gas()) * (1 + txopts.addGasEstimateRatio))
 	}
+	if signer.GasLimit < dryTx.Gas() {
+		return fmt.Errorf("gas limit lower than estimated value")
+	}
 	return nil
 }
 
