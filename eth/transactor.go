@@ -143,29 +143,9 @@ func (t *Transactor) transact(
 		return nil, fmt.Errorf("determineGas err: %w", err)
 	}
 	// Set nonce
-	pendingNonce, err := t.client.PendingNonceAt(context.Background(), t.address)
+	nonce, pendingNonce, err := t.determineNonce(txopts)
 	if err != nil {
-		return nil, fmt.Errorf("PendingNonceAt err: %w", err)
-	}
-	if txopts.maxPendingTxNum > 0 {
-		accountNonce, err := t.client.NonceAt(context.Background(), t.address, nil)
-		if err != nil {
-			return nil, fmt.Errorf("NonceAt err: %w", err)
-		}
-		if pendingNonce-accountNonce >= txopts.maxPendingTxNum {
-			return nil, fmt.Errorf("%w, pendingNonce:%d accountNonce:%d limit:%d",
-				ErrTooManyPendingTx, pendingNonce, accountNonce, txopts.maxPendingTxNum)
-		}
-	}
-	nonce := t.nonce
-	if pendingNonce > nonce || !t.sentTx || txopts.maxSubmittingTxNum == 1 {
-		nonce = pendingNonce
-	} else {
-		nonce++
-	}
-	if txopts.maxSubmittingTxNum > 0 && nonce-pendingNonce >= txopts.maxSubmittingTxNum {
-		return nil, fmt.Errorf("%w, submittingNonce:%d pendingNonce:%d limit:%d",
-			ErrTooManySubmittingTx, nonce, pendingNonce, txopts.maxSubmittingTxNum)
+		return nil, err
 	}
 	for {
 		nonceInt := big.NewInt(0)
@@ -223,6 +203,39 @@ func (t *Transactor) transact(
 	}
 }
 
+func (t *Transactor) determineNonce(txopts txOptions) (uint64, uint64, error) {
+	pendingNonce, err := t.client.PendingNonceAt(context.Background(), t.address)
+	if err != nil {
+		return 0, 0, fmt.Errorf("PendingNonceAt err: %w", err)
+	}
+	nonce := txopts.nonce
+
+	if txopts.nonce != 0 {
+		nonce = t.nonce
+		if pendingNonce > nonce || !t.sentTx || txopts.maxSubmittingTxNum == 1 {
+			nonce = pendingNonce
+		} else {
+			nonce++
+		}
+		if txopts.maxPendingTxNum > 0 {
+			accountNonce, err := t.client.NonceAt(context.Background(), t.address, nil)
+			if err != nil {
+				return 0, 0, fmt.Errorf("NonceAt err: %w", err)
+			}
+			if pendingNonce-accountNonce >= txopts.maxPendingTxNum {
+				return 0, 0, fmt.Errorf("%w, pendingNonce:%d accountNonce:%d limit:%d",
+					ErrTooManyPendingTx, pendingNonce, accountNonce, txopts.maxPendingTxNum)
+			}
+		}
+	}
+
+	if txopts.maxSubmittingTxNum > 0 && nonce-pendingNonce >= txopts.maxSubmittingTxNum {
+		return 0, 0, fmt.Errorf("%w, submittingNonce:%d pendingNonce:%d limit:%d",
+			ErrTooManySubmittingTx, nonce, pendingNonce, txopts.maxSubmittingTxNum)
+	}
+	return nonce, pendingNonce, nil
+}
+
 // determineGas sets the gas price and gas limit on the signer
 func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
 	// 1. Determine gas price
@@ -240,13 +253,13 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 		return fmt.Errorf("failed to call HeaderByNumber: %w", err)
 	}
 	if head.BaseFee != nil && !hasLegacyFlags {
-		err = determine1559GasPrice(ctx, signer, txopts, client, head)
+		err = determine1559GasPrice(signer, txopts)
 		if err != nil {
 			return fmt.Errorf("failed to determine EIP-1559 gas price: %w", err)
 		}
 	} else {
 		// Legacy pricing
-		err = determineLegacyGasPrice(ctx, signer, txopts, client)
+		err = determineLegacyGasPrice(signer, txopts, client)
 		if err != nil {
 			return fmt.Errorf("failed to determine legacy gas price: %w", err)
 		}
@@ -275,8 +288,7 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 }
 
 // determine1559GasPrice sets the gas price on the signer based on the EIP-1559 fee model
-func determine1559GasPrice(
-	ctx context.Context, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client, head *types.Header) error {
+func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions) error {
 	if txopts.maxPriorityFeePerGasGwei > 0 {
 		signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.maxPriorityFeePerGasGwei * 1e9))
 	}
@@ -288,7 +300,7 @@ func determine1559GasPrice(
 
 // determineLegacyGasPrice sets the gas price on the signer based on the legacy fee model
 func determineLegacyGasPrice(
-	ctx context.Context, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
+	signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
 	if txopts.forceGasGwei != nil {
 		signer.GasPrice = new(big.Int).SetUint64(*txopts.forceGasGwei * 1e9)
 		return nil

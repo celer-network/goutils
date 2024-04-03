@@ -13,6 +13,7 @@ import (
 type txOptions struct {
 	// Transact
 	ethValue *big.Int
+	nonce    uint64
 	// Legacy Tx gas price
 	minGasGwei   uint64
 	maxGasGwei   uint64
@@ -43,6 +44,8 @@ const (
 	defaultTxTimeout            = 6 * time.Hour
 	defaultTxQueryTimeout       = 2 * time.Minute
 	defaultTxQueryRetryInterval = 10 * time.Second
+	defaultMaxPendingTxNum      = 20
+	defaultMaxSubmittingTxNum   = 10
 )
 
 // do not return pointer here as defaultTxOptions is always deep copied when used
@@ -52,6 +55,8 @@ func defaultTxOptions() txOptions {
 		timeout:            defaultTxTimeout,
 		queryTimeout:       defaultTxQueryTimeout,
 		queryRetryInterval: defaultTxQueryRetryInterval,
+		maxPendingTxNum:    defaultMaxPendingTxNum,
+		maxSubmittingTxNum: defaultMaxSubmittingTxNum,
 	}
 }
 
@@ -76,6 +81,12 @@ func newFuncTxOption(f func(*txOptions)) *funcTxOption {
 func WithEthValue(v *big.Int) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.ethValue = v
+	})
+}
+
+func WithNonce(n uint64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.nonce = n
 	})
 }
 
