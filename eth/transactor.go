@@ -241,7 +241,8 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 	// 1. Determine gas price
 	// Only accept legacy flags or EIP-1559 flags, not both
 	hasLegacyFlags := txopts.forceGasGwei != nil || txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
-	has1559Flags := txopts.maxFeePerGasGwei > 0 || txopts.maxPriorityFeePerGasGwei > 0
+	has1559Flags := txopts.maxFeePerGasGwei > 0 || txopts.maxPriorityFeePerGasGwei > 0 ||
+		txopts.addPriorityFeePerGasGwei > 0 || txopts.addPriorityFeeRatio > 0
 	if hasLegacyFlags && has1559Flags {
 		return ErrConflictingGasFlags
 	}
@@ -253,7 +254,7 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 		return fmt.Errorf("failed to call HeaderByNumber: %w", err)
 	}
 	if head.BaseFee != nil && !hasLegacyFlags {
-		err = determine1559GasPrice(signer, txopts)
+		err = determine1559GasPrice(signer, txopts, client)
 		if err != nil {
 			return fmt.Errorf("failed to determine EIP-1559 gas price: %w", err)
 		}
@@ -288,12 +289,22 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 }
 
 // determine1559GasPrice sets the gas price on the signer based on the EIP-1559 fee model
-func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions) error {
-	if txopts.maxPriorityFeePerGasGwei > 0 {
-		signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.maxPriorityFeePerGasGwei * 1e9))
-	}
+func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
 	if txopts.maxFeePerGasGwei > 0 {
 		signer.GasFeeCap = new(big.Int).SetUint64(txopts.maxFeePerGasGwei * 1e9)
+	}
+	if txopts.maxPriorityFeePerGasGwei > 0 {
+		signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.maxPriorityFeePerGasGwei * 1e9))
+	} else if txopts.addPriorityFeePerGasGwei > 0 || txopts.addPriorityFeeRatio > 0 {
+		suggestedGasTipCap, err := client.SuggestGasTipCap(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to call SuggestGasTipCap: %w", err)
+		}
+		if txopts.addPriorityFeePerGasGwei > 0 {
+			signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.addPriorityFeePerGasGwei*1e9) + suggestedGasTipCap.Uint64())
+		} else if txopts.addPriorityFeeRatio > 0 {
+			signer.GasTipCap = new(big.Int).SetUint64(uint64(float64(suggestedGasTipCap.Uint64()) * (1 + txopts.addGasEstimateRatio)))
+		}
 	}
 	return nil
 }

@@ -20,8 +20,10 @@ type txOptions struct {
 	addGasGwei   uint64
 	forceGasGwei *uint64 // use pointer to allow forcing zero gas
 	// EIP-1559 Tx gas price
-	maxFeePerGasGwei         uint64
-	maxPriorityFeePerGasGwei float64
+	maxFeePerGasGwei         uint64  // aka GasFeeCap in gwei
+	maxPriorityFeePerGasGwei float64 // aka GasTipCap in gwei
+	addPriorityFeePerGasGwei float64
+	addPriorityFeeRatio      float64
 	// Gas limit
 	gasLimit            uint64
 	addGasEstimateRatio float64
@@ -130,6 +132,18 @@ func WithMaxFeePerGasGwei(g uint64) TxOption {
 func WithMaxPriorityFeePerGasGwei(g float64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.maxPriorityFeePerGasGwei = g
+	})
+}
+
+func WithAddPriorityFeePerGasGwei(g float64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.addPriorityFeePerGasGwei = g
+	})
+}
+
+func WithAddPriorityFeeRatio(r float64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.addPriorityFeeRatio = r
 	})
 }
 
