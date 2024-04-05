@@ -13,14 +13,17 @@ import (
 type txOptions struct {
 	// Transact
 	ethValue *big.Int
+	nonce    uint64
 	// Legacy Tx gas price
 	minGasGwei   uint64
 	maxGasGwei   uint64
 	addGasGwei   uint64
 	forceGasGwei *uint64 // use pointer to allow forcing zero gas
 	// EIP-1559 Tx gas price
-	maxFeePerGasGwei         uint64
-	maxPriorityFeePerGasGwei float64
+	maxFeePerGasGwei         uint64  // aka GasFeeCap in gwei
+	maxPriorityFeePerGasGwei float64 // aka GasTipCap in gwei
+	addPriorityFeePerGasGwei float64
+	addPriorityFeeRatio      float64
 	// Gas limit
 	gasLimit            uint64
 	addGasEstimateRatio float64
@@ -43,6 +46,8 @@ const (
 	defaultTxTimeout            = 6 * time.Hour
 	defaultTxQueryTimeout       = 2 * time.Minute
 	defaultTxQueryRetryInterval = 10 * time.Second
+	defaultMaxPendingTxNum      = 10
+	defaultMaxSubmittingTxNum   = 5
 )
 
 // do not return pointer here as defaultTxOptions is always deep copied when used
@@ -52,6 +57,8 @@ func defaultTxOptions() txOptions {
 		timeout:            defaultTxTimeout,
 		queryTimeout:       defaultTxQueryTimeout,
 		queryRetryInterval: defaultTxQueryRetryInterval,
+		maxPendingTxNum:    defaultMaxPendingTxNum,
+		maxSubmittingTxNum: defaultMaxSubmittingTxNum,
 	}
 }
 
@@ -76,6 +83,12 @@ func newFuncTxOption(f func(*txOptions)) *funcTxOption {
 func WithEthValue(v *big.Int) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.ethValue = v
+	})
+}
+
+func WithNonce(n uint64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.nonce = n
 	})
 }
 
@@ -119,6 +132,18 @@ func WithMaxFeePerGasGwei(g uint64) TxOption {
 func WithMaxPriorityFeePerGasGwei(g float64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.maxPriorityFeePerGasGwei = g
+	})
+}
+
+func WithAddPriorityFeePerGasGwei(g float64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.addPriorityFeePerGasGwei = g
+	})
+}
+
+func WithAddPriorityFeeRatio(r float64) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.addPriorityFeeRatio = r
 	})
 }
 
