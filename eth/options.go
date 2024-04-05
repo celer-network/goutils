@@ -46,8 +46,8 @@ const (
 	defaultTxTimeout            = 6 * time.Hour
 	defaultTxQueryTimeout       = 2 * time.Minute
 	defaultTxQueryRetryInterval = 10 * time.Second
-	defaultMaxPendingTxNum      = 20
-	defaultMaxSubmittingTxNum   = 10
+	defaultMaxPendingTxNum      = 10
+	defaultMaxSubmittingTxNum   = 5
 )
 
 // do not return pointer here as defaultTxOptions is always deep copied when used

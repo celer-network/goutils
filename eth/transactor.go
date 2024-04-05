@@ -208,9 +208,9 @@ func (t *Transactor) determineNonce(txopts txOptions) (uint64, uint64, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("PendingNonceAt err: %w", err)
 	}
-	nonce := txopts.nonce
+	nonce := txopts.nonce // init as given by the txOption (should be zero in most cases)
 
-	if txopts.nonce != 0 {
+	if txopts.nonce == 0 { // nonce given by the txOption is zero, which is the common case
 		nonce = t.nonce
 		if pendingNonce > nonce || !t.sentTx || txopts.maxSubmittingTxNum == 1 {
 			nonce = pendingNonce
@@ -349,13 +349,13 @@ func printGasGwei(signer *bind.TransactOpts) string {
 	}
 	res := ""
 	if signer.GasPrice != nil && signer.GasPrice.Sign() > 0 {
-		res += fmt.Sprintf("price %d ", signer.GasPrice.Uint64()/1e9)
+		res += fmt.Sprintf("price %.2f ", float64(signer.GasPrice.Uint64())/1e9)
 	}
 	if signer.GasFeeCap != nil && signer.GasFeeCap.Sign() > 0 {
 		res += fmt.Sprintf("feecap %d ", signer.GasFeeCap.Uint64()/1e9)
 	}
 	if signer.GasTipCap != nil && signer.GasTipCap.Sign() > 0 {
-		res += fmt.Sprintf("tipcap %d ", signer.GasTipCap.Uint64()/1e9)
+		res += fmt.Sprintf("tipcap %.2f ", float64(signer.GasTipCap.Uint64())/1e9)
 	}
 	return strings.TrimSpace(res)
 }
