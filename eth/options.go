@@ -143,7 +143,7 @@ func WithAddPriorityFeePerGasGwei(g float64) TxOption {
 	})
 }
 
-func WithAddGassFeeRatio(r float64) TxOption {
+func WithAddGasFeeRatio(r float64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.addGasFeeRatio = r
 	})
