@@ -5,6 +5,7 @@ package eth
 import (
 	"math/big"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/celer-network/goutils/log"
@@ -15,10 +16,10 @@ type txOptions struct {
 	ethValue *big.Int
 	nonce    uint64
 	// Legacy Tx gas price
-	minGasGwei   uint64
-	maxGasGwei   uint64
-	addGasGwei   uint64
-	forceGasGwei *uint64 // use pointer to allow forcing zero gas
+	minGasGwei   float64
+	maxGasGwei   float64
+	addGasGwei   float64
+	forceGasGwei *float64 // use pointer to allow forcing zero gas
 	// EIP-1559 Tx gas price
 	maxFeePerGasGwei         uint64  // aka GasFeeCap in gwei
 	maxPriorityFeePerGasGwei float64 // aka GasTipCap in gwei
@@ -92,19 +93,19 @@ func WithNonce(n uint64) TxOption {
 	})
 }
 
-func WithMinGasGwei(g uint64) TxOption {
+func WithMinGasGwei(g float64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.minGasGwei = g
 	})
 }
 
-func WithMaxGasGwei(g uint64) TxOption {
+func WithMaxGasGwei(g float64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.maxGasGwei = g
 	})
 }
 
-func WithAddGasGwei(g uint64) TxOption {
+func WithAddGasGwei(g float64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.addGasGwei = g
 	})
@@ -113,7 +114,7 @@ func WithAddGasGwei(g uint64) TxOption {
 func WithForceGasGwei(g string) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		if g != "" {
-			gwei, err := strconv.ParseUint(g, 10, 64)
+			gwei, err := strconv.ParseFloat(strings.TrimSpace(g), 64)
 			if err != nil {
 				log.Errorln("invalid ForceGasGwei", g)
 				return
