@@ -241,8 +241,7 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 	// 1. Determine gas price
 	// Only accept legacy flags or EIP-1559 flags, not both
 	hasLegacyFlags := txopts.forceGasGwei != nil || txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
-	has1559Flags := txopts.maxFeePerGasGwei > 0 || txopts.maxPriorityFeePerGasGwei > 0 ||
-		txopts.addPriorityFeePerGasGwei > 0 || txopts.addPriorityFeeRatio > 0
+	has1559Flags := txopts.maxFeePerGasGwei > 0 || txopts.maxPriorityFeePerGasGwei > 0 || txopts.addPriorityFeePerGasGwei > 0
 	if hasLegacyFlags && has1559Flags {
 		return ErrConflictingGasFlags
 	}
@@ -295,15 +294,15 @@ func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *
 	}
 	if txopts.maxPriorityFeePerGasGwei > 0 {
 		signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.maxPriorityFeePerGasGwei * 1e9))
-	} else if txopts.addPriorityFeePerGasGwei > 0 || txopts.addPriorityFeeRatio > 0 {
+	} else if txopts.addPriorityFeePerGasGwei > 0 || txopts.addGasFeeRatio > 0 {
 		suggestedGasTipCap, err := client.SuggestGasTipCap(context.Background())
 		if err != nil {
 			return fmt.Errorf("failed to call SuggestGasTipCap: %w", err)
 		}
 		if txopts.addPriorityFeePerGasGwei > 0 {
 			signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.addPriorityFeePerGasGwei*1e9) + suggestedGasTipCap.Uint64())
-		} else if txopts.addPriorityFeeRatio > 0 {
-			signer.GasTipCap = new(big.Int).SetUint64(uint64(float64(suggestedGasTipCap.Uint64()) * (1 + txopts.addGasEstimateRatio)))
+		} else if txopts.addGasFeeRatio > 0 {
+			signer.GasTipCap = new(big.Int).SetUint64(uint64(float64(suggestedGasTipCap.Uint64()) * (1 + txopts.addGasFeeRatio)))
 		}
 	}
 	return nil
@@ -313,7 +312,7 @@ func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *
 func determineLegacyGasPrice(
 	signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
 	if txopts.forceGasGwei != nil {
-		signer.GasPrice = new(big.Int).SetUint64(*txopts.forceGasGwei * 1e9)
+		signer.GasPrice = new(big.Int).SetUint64(uint64(*txopts.forceGasGwei * 1e9))
 		return nil
 	}
 	gasPrice, err := client.SuggestGasPrice(context.Background())
@@ -321,18 +320,20 @@ func determineLegacyGasPrice(
 		return fmt.Errorf("failed to call SuggestGasPrice: %w", err)
 	}
 	if txopts.addGasGwei > 0 { // Add gas price to the suggested value to speed up transactions
-		addPrice := new(big.Int).SetUint64(txopts.addGasGwei * 1e9)
+		addPrice := new(big.Int).SetUint64(uint64(txopts.addGasGwei * 1e9))
 		gasPrice.Add(gasPrice, addPrice)
+	} else if txopts.addGasFeeRatio > 0 {
+		gasPrice = new(big.Int).SetUint64(uint64(float64(gasPrice.Uint64()) * (1 + txopts.addGasFeeRatio)))
 	}
 	if txopts.minGasGwei > 0 { // gas can't be lower than minGas
-		minPrice := new(big.Int).SetUint64(txopts.minGasGwei * 1e9)
+		minPrice := new(big.Int).SetUint64(uint64(txopts.minGasGwei * 1e9))
 		// minPrice is larger than suggested, use minPrice
 		if minPrice.Cmp(gasPrice) > 0 {
 			gasPrice = minPrice
 		}
 	}
 	if txopts.maxGasGwei > 0 { // maxGas 0 means no cap on gas price
-		maxPrice := new(big.Int).SetUint64(txopts.maxGasGwei * 1e9)
+		maxPrice := new(big.Int).SetUint64(uint64(txopts.maxGasGwei * 1e9))
 		// GasPrice is larger than allowed cap, use maxPrice but log warning
 		if maxPrice.Cmp(gasPrice) < 0 {
 			log.Warnf("suggested gas price %s larger than cap %s", gasPrice, maxPrice)
