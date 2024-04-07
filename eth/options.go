@@ -24,7 +24,8 @@ type txOptions struct {
 	maxFeePerGasGwei         uint64  // aka GasFeeCap in gwei
 	maxPriorityFeePerGasGwei float64 // aka GasTipCap in gwei
 	addPriorityFeePerGasGwei float64
-	addPriorityFeeRatio      float64
+	// For both Legacy and  EIP-1559
+	addGasFeeRatio float64
 	// Gas limit
 	gasLimit            uint64
 	addGasEstimateRatio float64
@@ -142,9 +143,9 @@ func WithAddPriorityFeePerGasGwei(g float64) TxOption {
 	})
 }
 
-func WithAddPriorityFeeRatio(r float64) TxOption {
+func WithAddGassFeeRatio(r float64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
-		o.addPriorityFeeRatio = r
+		o.addGasFeeRatio = r
 	})
 }
 
