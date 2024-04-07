@@ -24,7 +24,7 @@ type txOptions struct {
 	maxFeePerGasGwei         uint64  // aka GasFeeCap in gwei
 	maxPriorityFeePerGasGwei float64 // aka GasTipCap in gwei
 	addPriorityFeePerGasGwei float64
-	// For both Legacy and  EIP-1559
+	// For both Legacy and EIP-1559, use suggested * (1 + addGasFeeRatio)
 	addGasFeeRatio float64
 	// Gas limit
 	gasLimit            uint64
