@@ -270,7 +270,15 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 	signer.NoSend = true
 	dryTx, err := method(client, signer)
 	if err != nil {
-		return fmt.Errorf("tx dry-run err: %w", err)
+		// Print the calldata for debugging
+		signer.GasLimit = 5000000 // dummy gas limit
+		dryTx2, err2 := method(client, signer)
+		signer.GasLimit = 0
+		signer.NoSend = false
+		if err2 != nil {
+			return fmt.Errorf("dry-run tx err: %s, get calldata err: %s", err, err2)
+		}
+		return fmt.Errorf("tx dry-run err: %w, calldata: %s", err, common.Bytes2Hex(dryTx2.Data()))
 	}
 	signer.NoSend = false
 	// 2.2 Set the gas limit
@@ -278,7 +286,7 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 		// Use the specified limit if set
 		signer.GasLimit = txopts.gasLimit
 	} else {
-		// Use estimiated gas limit multiplied by the configured ratio
+		// Use estimated gas limit multiplied by the configured ratio
 		signer.GasLimit = uint64(float64(dryTx.Gas()) * (1 + txopts.addGasEstimateRatio))
 	}
 	if signer.GasLimit < dryTx.Gas() {
