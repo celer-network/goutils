@@ -64,7 +64,7 @@ func waitMined(
 		txHash = tx.Hash()
 		msg, err := core.TransactionToMessage(tx, types.NewLondonSigner(tx.ChainId()), big.NewInt(0))
 		if err != nil {
-			return nil, fmt.Errorf("AsMessage err: %w", err)
+			return nil, fmt.Errorf("TransactionToMessage err: %w", err)
 		}
 		txSender = msg.From
 	}
