@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
@@ -64,6 +65,17 @@ func (s *CelerSigner) SignEthMessage(data []byte) ([]byte, error) {
 	return sig, nil
 }
 
+// input data: a byte array of raw message to be signed, note the raw data and its length will be used
+// unlike SignEthMessage which does keccak first to avoid malleability issue
+// return a byte array signature in the R,S,V format
+func (s *CelerSigner) SignRawMessage(data []byte) ([]byte, error) {
+	sig, err := crypto.Sign(GeneratePrefixedHashForRaw(data), s.key)
+	if err != nil {
+		return nil, err
+	}
+	return sig, nil
+}
+
 // input rawTx: a byte array of a RLP-encoded unsigned Ethereum raw transaction
 // return a byte array signed raw tx in RLP-encoded format
 func (s *CelerSigner) SignEthTransaction(rawTx []byte) ([]byte, error) {
@@ -91,7 +103,8 @@ func IsSignatureValid(signer common.Address, data []byte, sig []byte) bool {
 	return recoveredAddr == signer
 }
 
-func RecoverSigner(data []byte, sig []byte) (common.Address, error) {
+// optional isRaw to support recover raw message. use variadic to be compatible w/ legacy code
+func RecoverSigner(data []byte, sig []byte, isRaw ...bool) (common.Address, error) {
 	if len(sig) != 65 {
 		return common.Address{}, errors.New("invalid signature length")
 	}
@@ -107,7 +120,11 @@ func RecoverSigner(data []byte, sig []byte) (common.Address, error) {
 		// we also fix v in celersdk.PublishSignedResult to be extra safe
 		tmpSig[64] -= 27
 	}
-	pubKey, err := crypto.SigToPub(GeneratePrefixedHash(data), tmpSig)
+	hash := GeneratePrefixedHash(data)
+	if len(isRaw) > 0 && isRaw[0] {
+		hash = GeneratePrefixedHashForRaw(data)
+	}
+	pubKey, err := crypto.SigToPub(hash, tmpSig)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -115,8 +132,14 @@ func RecoverSigner(data []byte, sig []byte) (common.Address, error) {
 	return recoveredAddr, nil
 }
 
+// keccak data first, then prefix "\x19Ethereum Signed Message:\n" and length 32
 func GeneratePrefixedHash(data []byte) []byte {
 	return crypto.Keccak256([]byte("\x19Ethereum Signed Message:\n32"), crypto.Keccak256(data))
+}
+
+// add length and raw as is, only does keccak once of the concat result. to be compatible with ethers signmessage behavior
+func GeneratePrefixedHashForRaw(raw []byte) []byte {
+	return crypto.Keccak256([]byte(fmt.Sprintf("\x19Ethereum Signed Message:\n%d", len(raw))), raw)
 }
 
 func GetAddrPrivKeyFromKeystore(keyjson, passphrase string) (common.Address, string, error) {
