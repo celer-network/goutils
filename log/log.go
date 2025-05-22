@@ -28,7 +28,7 @@
 // -loglongfile=[true|false] default: false
 //		Show long file path (e.g., goutils/log/test/logtest.go:17).
 // -logpathsplit=[string] default: "celer-network/"
-//		Long file name starts after the splittter, if -loglongfile=true
+//		Long file name starts after the splitter, if -loglongfile=true
 
 // Example log format: "2006-01-02 15:04:05 |DEBUG| test.go:9: log message"
 
@@ -91,7 +91,7 @@ var levelInfo = []levelmeta{
 
 type arrayFlags []string
 
-// Logger obejct
+// Logger object
 type Logger struct {
 	out        io.Writer    // log default writer
 	file       *os.File     // log file writer
@@ -243,7 +243,7 @@ func (l *Logger) output(msg string, level Level) {
 }
 
 func (l *Logger) exit(err error) {
-	fmt.Fprintf(l.out, "FATAL: log exiting because of error: %w\n", err)
+	fmt.Fprintf(l.out, "FATAL: log exiting because of error: %v\n", err)
 	os.Exit(2)
 }
 
