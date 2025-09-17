@@ -162,45 +162,20 @@ func (t *Transactor) transact(
 			} else {
 				return nil, fmt.Errorf("TxMethod err: %w. nonce %s", err, signer.Nonce)
 			}
-		} else {
-			t.sentTx = true
-			logmsg := fmt.Sprintf("Tx sent %x chain %s nonce %d gas %s", tx.Hash(), t.chainId, nonce, printGasGwei(signer))
-			if handler != nil {
-				go func() {
-					log.Debugf("%s, wait to be mined", logmsg)
-					receipt, err := WaitMined(
-						context.Background(), client, tx,
-						WithBlockDelay(txopts.blockDelay),
-						WithPollingInterval(txopts.pollingInterval),
-						WithTimeout(txopts.timeout),
-						WithQueryTimeout(txopts.queryTimeout),
-						WithQueryRetryInterval(txopts.queryRetryInterval))
-					if err != nil {
-						if handler.OnError != nil {
-							handler.OnError(tx, err)
-						}
-						if errors.Is(err, ethereum.NotFound) && pendingNonce > 0 {
-							// reset transactor nonce to pending nonce
-							// this means pending txs after this will probably fail
-							t.lock.Lock()
-							t.nonce = pendingNonce - 1
-							log.Warnf("Reset chain %s transactor nonce to %d", t.chainId, t.nonce)
-							t.lock.Unlock()
-						}
-						return
-					}
-					log.Debugf("Tx mined %x, status %d, chain %s, gas limit %d used %d",
-						tx.Hash(), receipt.Status, t.chainId, tx.Gas(), receipt.GasUsed)
-					if handler.OnMined != nil {
-						handler.OnMined(receipt)
-					}
-				}()
-			} else {
-				log.Debug(logmsg)
-			}
-			t.nonce = nonce
-			return tx, nil
+			continue
 		}
+		t.sentTx = true
+
+		waitSuffix := ""
+		if handler != nil {
+			// Start async wait first, then log with suffix
+			t.waitTxAsync(client, tx, handler, pendingNonce, txopts)
+			waitSuffix = ", wait to be mined"
+		}
+		log.Debugf("Tx sent %x chain %s nonce %d gas %s%s", tx.Hash(), t.chainId, nonce, printGasGwei(signer), waitSuffix)
+
+		t.nonce = nonce
+		return tx, nil
 	}
 }
 
@@ -235,6 +210,46 @@ func (t *Transactor) determineNonce(txopts txOptions) (uint64, uint64, error) {
 			ErrTooManySubmittingTx, nonce, pendingNonce, txopts.maxSubmittingTxNum)
 	}
 	return nonce, pendingNonce, nil
+}
+
+// waitTxAsync waits for the given transaction to be mined and triggers the appropriate callbacks.
+// It preserves the original logic that was previously inlined in transact(), including the
+// nonce reset behavior when a NotFound error occurs.
+func (t *Transactor) waitTxAsync(
+	client *ethclient.Client,
+	tx *types.Transaction,
+	handler *TransactionStateHandler,
+	pendingNonce uint64,
+	txopts txOptions,
+) {
+	go func() {
+		receipt, err := WaitMined(
+			context.Background(), client, tx,
+			WithBlockDelay(txopts.blockDelay),
+			WithPollingInterval(txopts.pollingInterval),
+			WithTimeout(txopts.timeout),
+			WithQueryTimeout(txopts.queryTimeout),
+			WithQueryRetryInterval(txopts.queryRetryInterval))
+		if err != nil {
+			if handler.OnError != nil {
+				handler.OnError(tx, err)
+			}
+			if errors.Is(err, ethereum.NotFound) && pendingNonce > 0 {
+				// reset transactor nonce to pending nonce
+				// this means pending txs after this will probably fail
+				t.lock.Lock()
+				t.nonce = pendingNonce - 1
+				log.Warnf("Reset chain %s transactor nonce to %d", t.chainId, t.nonce)
+				t.lock.Unlock()
+			}
+			return
+		}
+		log.Debugf("Tx mined %x, status %d, chain %s, gas limit %d used %d",
+			tx.Hash(), receipt.Status, t.chainId, tx.Gas(), receipt.GasUsed)
+		if handler.OnMined != nil {
+			handler.OnMined(receipt)
+		}
+	}()
 }
 
 // determineGas sets the gas price and gas limit on the signer
