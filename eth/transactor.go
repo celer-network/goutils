@@ -23,10 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const (
-	parityErrIncrementNonce = "incrementing the nonce"
-)
-
 var (
 	ErrConflictingGasFlags = errors.New("cannot specify both legacy and EIP-1559 gas flags")
 	ErrTooManyPendingTx    = errors.New("too many txs in pending status")
@@ -143,26 +139,25 @@ func (t *Transactor) transact(
 	if err != nil {
 		return nil, fmt.Errorf("determineGas err: %w", err)
 	}
-	// Set nonce
+	// Determine nonce (uses provided nonce if non-zero)
 	nonce, pendingNonce, err := t.determineNonce(txopts)
 	if err != nil {
 		return nil, err
 	}
+
 	for {
-		nonceInt := big.NewInt(0)
-		nonceInt.SetUint64(nonce)
+		nonceInt := new(big.Int).SetUint64(nonce)
 		signer.Nonce = nonceInt
 		tx, err := method(client, signer)
 		if err != nil {
-			errStr := err.Error()
-			if errStr == core.ErrNonceTooLow.Error() ||
-				errStr == txpool.ErrReplaceUnderpriced.Error() ||
-				strings.Contains(errStr, parityErrIncrementNonce) {
-				nonce++
-			} else {
-				return nil, fmt.Errorf("TxMethod err: %w. nonce %s", err, signer.Nonce)
+			if errors.Is(err, core.ErrNonceTooLow) || errors.Is(err, txpool.ErrReplaceUnderpriced) { // retryable nonce errors
+				if !(txopts.noNonceRetry && txopts.nonce != 0) { // retry allowed (either flag not set or nonce not explicitly provided)
+					nonce++
+					log.Debugf("TxMethod nonce err: %s, retrying with nonce %d", err, nonce)
+					continue
+				}
 			}
-			continue
+			return nil, fmt.Errorf("TxMethod err: %w. nonce %s", err, signer.Nonce)
 		}
 		t.sentTx = true
 
@@ -213,8 +208,6 @@ func (t *Transactor) determineNonce(txopts txOptions) (uint64, uint64, error) {
 }
 
 // waitTxAsync waits for the given transaction to be mined and triggers the appropriate callbacks.
-// It preserves the original logic that was previously inlined in transact(), including the
-// nonce reset behavior when a NotFound error occurs.
 func (t *Transactor) waitTxAsync(
 	client *ethclient.Client,
 	tx *types.Transaction,

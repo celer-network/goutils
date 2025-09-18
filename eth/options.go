@@ -15,6 +15,8 @@ type txOptions struct {
 	// Transact
 	ethValue *big.Int
 	nonce    uint64
+
+	noNonceRetry bool // If true and nonce>0, do not retry or increment nonce on nonce-related errors
 	// Legacy Tx gas price
 	minGasGwei   float64
 	maxGasGwei   float64
@@ -214,5 +216,11 @@ func WithMaxPendingTxNum(n uint64) TxOption {
 func WithMaxSubmittingTxNum(n uint64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.maxSubmittingTxNum = n
+	})
+}
+
+func WithNoNonceRetry() TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.noNonceRetry = true
 	})
 }
