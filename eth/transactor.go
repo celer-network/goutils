@@ -338,13 +338,6 @@ func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *
 
 	if txopts.maxFeePerGasGwei > 0 {
 		signer.GasFeeCap = new(big.Int).SetUint64(uint64(txopts.maxFeePerGasGwei * 1e9))
-		// Validate: explicit feecap must be >= tipcap
-		if signer.GasFeeCap.Cmp(signer.GasTipCap) < 0 {
-			return fmt.Errorf("feecap (%.4f gwei) must be >= tipcap (%.4f gwei)",
-				txopts.maxFeePerGasGwei,
-				float64(signer.GasTipCap.Uint64())/1e9,
-			)
-		}
 	} else {
 		// feecap = 2*baseFee + tip (handles typical basefee increases per EIP-1559 guidance)
 		feecap := new(big.Int).Mul(baseFee, big.NewInt(2))
@@ -476,5 +469,70 @@ func newTxWaitMinedHandler(
 			log.Errorf("%s transaction %x err: %s", description, tx.Hash(), err)
 			errChan <- err
 		},
+	}
+}
+
+func SimpleTransferTx(to common.Address) TxMethod {
+	return func(backend bind.ContractTransactor, opts *bind.TransactOpts) (*types.Transaction, error) {
+		// Determine gas: default 21,000; when dry-run and unset, estimate for accuracy
+		gas := opts.GasLimit
+		if gas == 0 {
+			if opts.NoSend {
+				if ec, ok := backend.(*ethclient.Client); ok {
+					ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+					defer cancel()
+					// Estimate without calldata for a plain value transfer
+					est, err := ec.EstimateGas(ctx, ethereum.CallMsg{
+						From:  opts.From,
+						To:    &to,
+						Value: opts.Value,
+					})
+					if err == nil && est > 0 {
+						gas = est
+					}
+				}
+			}
+			if gas == 0 {
+				gas = 21000
+			}
+		}
+
+		// Build the transaction (no calldata)
+		var tx *types.Transaction
+		if opts.GasFeeCap != nil && opts.GasFeeCap.Sign() > 0 {
+			// EIP-1559
+			tx = types.NewTx(&types.DynamicFeeTx{
+				Nonce:     opts.Nonce.Uint64(),
+				To:        &to,
+				Value:     opts.Value,
+				Gas:       gas,
+				GasTipCap: opts.GasTipCap,
+				GasFeeCap: opts.GasFeeCap,
+			})
+		} else {
+			// Legacy
+			tx = types.NewTx(&types.LegacyTx{
+				Nonce:    opts.Nonce.Uint64(),
+				To:       &to,
+				Value:    opts.Value,
+				Gas:      gas,
+				GasPrice: opts.GasPrice,
+			})
+		}
+
+		// Respect NoSend for determineGas dry-run: no need to sign
+		if opts.NoSend {
+			return tx, nil
+		}
+
+		// Sign and send
+		signed, err := opts.Signer(opts.From, tx)
+		if err != nil {
+			return nil, err
+		}
+		if err := backend.SendTransaction(context.Background(), signed); err != nil {
+			return nil, err
+		}
+		return signed, nil
 	}
 }
