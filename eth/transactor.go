@@ -318,12 +318,9 @@ func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *
 		return nil
 	}
 
-	if txopts.maxFeePerGasGwei > 0 {
-		signer.GasFeeCap = new(big.Int).SetUint64(txopts.maxFeePerGasGwei * 1e9)
-	}
 	if txopts.maxPriorityFeePerGasGwei > 0 {
 		signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.maxPriorityFeePerGasGwei * 1e9))
-	} else if txopts.addPriorityFeePerGasGwei > 0 || txopts.addGasFeeRatio > 0 {
+	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
 		defer cancel()
 		suggestedGasTipCap, err := client.SuggestGasTipCap(ctx)
@@ -334,8 +331,27 @@ func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *
 			signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.addPriorityFeePerGasGwei*1e9) + suggestedGasTipCap.Uint64())
 		} else if txopts.addGasFeeRatio > 0 {
 			signer.GasTipCap = new(big.Int).SetUint64(uint64(float64(suggestedGasTipCap.Uint64()) * (1 + txopts.addGasFeeRatio)))
+		} else {
+			signer.GasTipCap = suggestedGasTipCap
 		}
 	}
+
+	if txopts.maxFeePerGasGwei > 0 {
+		signer.GasFeeCap = new(big.Int).SetUint64(uint64(txopts.maxFeePerGasGwei * 1e9))
+		// Validate: explicit feecap must be >= tipcap
+		if signer.GasFeeCap.Cmp(signer.GasTipCap) < 0 {
+			return fmt.Errorf("feecap (%.4f gwei) must be >= tipcap (%.4f gwei)",
+				txopts.maxFeePerGasGwei,
+				float64(signer.GasTipCap.Uint64())/1e9,
+			)
+		}
+	} else {
+		// feecap = 2*baseFee + tip (handles typical basefee increases per EIP-1559 guidance)
+		feecap := new(big.Int).Mul(baseFee, big.NewInt(2))
+		feecap.Add(feecap, signer.GasTipCap)
+		signer.GasFeeCap = feecap
+	}
+
 	return nil
 }
 

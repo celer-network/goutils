@@ -23,7 +23,7 @@ type txOptions struct {
 	maxGasGwei float64
 	addGasGwei float64
 	// EIP-1559 Tx gas price
-	maxFeePerGasGwei         uint64  // aka GasFeeCap in gwei
+	maxFeePerGasGwei         float64 // aka GasFeeCap in gwei
 	maxPriorityFeePerGasGwei float64 // aka GasTipCap in gwei
 	addPriorityFeePerGasGwei float64
 	// For both Legacy and EIP-1559
@@ -128,7 +128,7 @@ func WithForceGasGwei(g string) TxOption {
 	})
 }
 
-func WithMaxFeePerGasGwei(g uint64) TxOption {
+func WithMaxFeePerGasGwei(g float64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.maxFeePerGasGwei = g
 	})
