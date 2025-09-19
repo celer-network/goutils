@@ -17,17 +17,18 @@ type txOptions struct {
 	nonce    uint64
 
 	noNonceRetry bool // If true and nonce>0, do not retry or increment nonce on nonce-related errors
+
 	// Legacy Tx gas price
-	minGasGwei   float64
-	maxGasGwei   float64
-	addGasGwei   float64
-	forceGasGwei *float64 // use pointer to allow forcing zero gas
+	minGasGwei float64
+	maxGasGwei float64
+	addGasGwei float64
 	// EIP-1559 Tx gas price
 	maxFeePerGasGwei         uint64  // aka GasFeeCap in gwei
 	maxPriorityFeePerGasGwei float64 // aka GasTipCap in gwei
 	addPriorityFeePerGasGwei float64
-	// For both Legacy and EIP-1559, use suggested * (1 + addGasFeeRatio)
-	addGasFeeRatio float64
+	// For both Legacy and EIP-1559
+	forceGasGwei   *float64 // use pointer to allow forcing zero gas
+	addGasFeeRatio float64  // use suggested * (1 + addGasFeeRatio)
 	// Gas limit
 	gasLimit            uint64
 	addGasEstimateRatio float64

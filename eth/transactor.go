@@ -249,7 +249,7 @@ func (t *Transactor) waitTxAsync(
 func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
 	// 1. Determine gas price
 	// Only accept legacy flags or EIP-1559 flags, not both
-	hasLegacyFlags := txopts.forceGasGwei != nil || txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
+	hasLegacyFlags := txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
 	has1559Flags := txopts.maxFeePerGasGwei > 0 || txopts.maxPriorityFeePerGasGwei > 0 || txopts.addPriorityFeePerGasGwei > 0
 	if hasLegacyFlags && has1559Flags {
 		return ErrConflictingGasFlags
@@ -262,7 +262,7 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 		return fmt.Errorf("failed to call HeaderByNumber: %w", err)
 	}
 	if head.BaseFee != nil && !hasLegacyFlags {
-		err = determine1559GasPrice(signer, txopts, client)
+		err = determine1559GasPrice(signer, txopts, client, head.BaseFee)
 		if err != nil {
 			return fmt.Errorf("failed to determine EIP-1559 gas price: %w", err)
 		}
@@ -305,14 +305,28 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 }
 
 // determine1559GasPrice sets the gas price on the signer based on the EIP-1559 fee model
-func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
+func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client, baseFee *big.Int) error {
+	// If forceGasGwei is set, map it to 1559 caps; it overrides other 1559 flags
+	if txopts.forceGasGwei != nil {
+		forceWei := new(big.Int).SetUint64(uint64(*txopts.forceGasGwei * 1e9))
+		signer.GasFeeCap = new(big.Int).Set(forceWei)
+		tip := new(big.Int).Sub(forceWei, baseFee) // baseFee is guaranteed to be non-nil here
+		if tip.Sign() < 0 {
+			tip = big.NewInt(0)
+		}
+		signer.GasTipCap = tip
+		return nil
+	}
+
 	if txopts.maxFeePerGasGwei > 0 {
 		signer.GasFeeCap = new(big.Int).SetUint64(txopts.maxFeePerGasGwei * 1e9)
 	}
 	if txopts.maxPriorityFeePerGasGwei > 0 {
 		signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.maxPriorityFeePerGasGwei * 1e9))
 	} else if txopts.addPriorityFeePerGasGwei > 0 || txopts.addGasFeeRatio > 0 {
-		suggestedGasTipCap, err := client.SuggestGasTipCap(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+		defer cancel()
+		suggestedGasTipCap, err := client.SuggestGasTipCap(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to call SuggestGasTipCap: %w", err)
 		}
@@ -332,7 +346,9 @@ func determineLegacyGasPrice(
 		signer.GasPrice = new(big.Int).SetUint64(uint64(*txopts.forceGasGwei * 1e9))
 		return nil
 	}
-	gasPrice, err := client.SuggestGasPrice(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+	defer cancel()
+	gasPrice, err := client.SuggestGasPrice(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to call SuggestGasPrice: %w", err)
 	}
