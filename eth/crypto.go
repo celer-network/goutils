@@ -29,35 +29,59 @@ type Signer interface {
 	SignEthTransaction(rawTx []byte) ([]byte, error)
 }
 
-type CelerSigner struct {
+// PrivateKeySigner signs Ethereum messages and transactions using a local ECDSA private key.
+// It is generic and suitable for use outside Celer-specific projects.
+type PrivateKeySigner struct {
 	key     *ecdsa.PrivateKey
 	chainId *big.Int
 }
 
-// Create a new Signer object from the private key
-// chainId could be nil if the signer is expected to only call SignEthMessage func
-func NewSigner(privateKey string, chainId *big.Int) (*CelerSigner, error) {
+// Backward compatibility: keep the old name temporarily.
+// Deprecated: Use PrivateKeySigner instead.
+type CelerSigner = PrivateKeySigner
+
+// NewPrivateKeySigner creates a signer backed by a hex-encoded ECDSA private key.
+// chainId may be nil if the signer will only call SignEthMessage/SignRawMessage.
+func NewPrivateKeySigner(privateKey string, chainId *big.Int) (*PrivateKeySigner, error) {
 	key, err := crypto.HexToECDSA(privateKey)
 	if err != nil {
 		return nil, err
 	}
-	c := &CelerSigner{key: key, chainId: chainId}
+	c := &PrivateKeySigner{key: key, chainId: chainId}
 	return c, nil
 }
 
-// Create a new Signer object from the keystore json and passphrase
-// chainId could be nil if the signer is expected to only call SignEthMessage func
-func NewSignerFromKeystore(keyjson, passphrase string, chainId *big.Int) (*CelerSigner, error) {
+// NewKeystoreSigner creates a signer from a geth keystore JSON and passphrase.
+// chainId may be nil if the signer will only call SignEthMessage/SignRawMessage.
+func NewKeystoreSigner(keyjson, passphrase string, chainId *big.Int) (*PrivateKeySigner, error) {
 	_, privkey, err := GetAddrPrivKeyFromKeystore(keyjson, passphrase)
 	if err != nil {
 		return nil, err
 	}
-	return NewSigner(privkey, chainId)
+	return NewPrivateKeySigner(privkey, chainId)
+}
+
+// Deprecated: Use NewPrivateKeySigner.
+func NewSigner(privateKey string, chainId *big.Int) (*CelerSigner, error) { //nolint:ireturn
+	s, err := NewPrivateKeySigner(privateKey, chainId)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// Deprecated: Use NewKeystoreSigner.
+func NewSignerFromKeystore(keyjson, passphrase string, chainId *big.Int) (*CelerSigner, error) { //nolint:ireturn
+	s, err := NewKeystoreSigner(keyjson, passphrase, chainId)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 // input data: a byte array of raw message to be signed
 // return a byte array signature in the R,S,V format
-func (s *CelerSigner) SignEthMessage(data []byte) ([]byte, error) {
+func (s *PrivateKeySigner) SignEthMessage(data []byte) ([]byte, error) {
 	sig, err := crypto.Sign(GeneratePrefixedHash(data), s.key)
 	if err != nil {
 		return nil, err
@@ -68,7 +92,7 @@ func (s *CelerSigner) SignEthMessage(data []byte) ([]byte, error) {
 // input data: a byte array of raw message to be signed, note the raw data and its length will be used
 // unlike SignEthMessage which does keccak first to avoid malleability issue
 // return a byte array signature in the R,S,V format
-func (s *CelerSigner) SignRawMessage(data []byte) ([]byte, error) {
+func (s *PrivateKeySigner) SignRawMessage(data []byte) ([]byte, error) {
 	sig, err := crypto.Sign(GeneratePrefixedHashForRaw(data), s.key)
 	if err != nil {
 		return nil, err
@@ -78,7 +102,7 @@ func (s *CelerSigner) SignRawMessage(data []byte) ([]byte, error) {
 
 // input rawTx: a byte array of a RLP-encoded unsigned Ethereum raw transaction
 // return a byte array signed raw tx in RLP-encoded format
-func (s *CelerSigner) SignEthTransaction(rawTx []byte) ([]byte, error) {
+func (s *PrivateKeySigner) SignEthTransaction(rawTx []byte) ([]byte, error) {
 	tx := new(types.Transaction)
 	if err := rlp.DecodeBytes(rawTx, tx); err != nil {
 		return nil, err
