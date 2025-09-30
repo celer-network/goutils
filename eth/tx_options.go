@@ -44,6 +44,9 @@ type txOptions struct {
 	// Pending tx control
 	maxPendingTxNum    uint64 // max number of tx in pending status (already in txpool)
 	maxSubmittingTxNum uint64 // max number of tx being submitted (not in txpool yet)
+
+	// Logging
+	txLogInfo bool // if true, log 'Tx sent' and 'Tx mined' at Info; otherwise Debug
 }
 
 const (
@@ -64,6 +67,7 @@ func defaultTxOptions() txOptions {
 		queryRetryInterval: defaultTxQueryRetryInterval,
 		maxPendingTxNum:    defaultMaxPendingTxNum,
 		maxSubmittingTxNum: defaultMaxSubmittingTxNum,
+		txLogInfo:          false,
 	}
 }
 
@@ -223,5 +227,12 @@ func WithMaxSubmittingTxNum(n uint64) TxOption {
 func WithNoNonceRetry() TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.noNonceRetry = true
+	})
+}
+
+// WithTxLogInfo makes transaction lifecycle logs ("Tx sent", "Tx mined") use Info level instead of Debug.
+func WithTxLogInfo() TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.txLogInfo = true
 	})
 }

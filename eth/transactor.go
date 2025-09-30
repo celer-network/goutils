@@ -167,7 +167,11 @@ func (t *Transactor) transact(
 			t.waitTxAsync(client, tx, handler, pendingNonce, txopts)
 			waitSuffix = ", wait to be mined"
 		}
-		log.Debugf("Tx sent %x chain %s nonce %d gas %s%s", tx.Hash(), t.chainId, nonce, printGasGwei(signer), waitSuffix)
+		txLogf := log.Debugf
+		if txopts.txLogInfo {
+			txLogf = log.Infof
+		}
+		txLogf("Tx sent %x chain %s nonce %d gas %s%s", tx.Hash(), t.chainId, nonce, printGasGwei(signer), waitSuffix)
 
 		t.nonce = nonce
 		return tx, nil
@@ -237,7 +241,11 @@ func (t *Transactor) waitTxAsync(
 			}
 			return
 		}
-		log.Debugf("Tx mined %x, status %d, chain %s, gas limit %d used %d",
+		txLogf := log.Debugf
+		if txopts.txLogInfo {
+			txLogf = log.Infof
+		}
+		txLogf("Tx mined %x, status %d, chain %s, gas limit %d used %d",
 			tx.Hash(), receipt.Status, t.chainId, tx.Gas(), receipt.GasUsed)
 		if handler.OnMined != nil {
 			handler.OnMined(receipt)
