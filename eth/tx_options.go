@@ -230,9 +230,8 @@ func WithNoNonceRetry() TxOption {
 	})
 }
 
-// WithTxLogInfo makes transaction lifecycle logs ("Tx sent", "Tx mined") use Info level instead of Debug.
-func WithTxLogInfo() TxOption {
+func WithTxLogInfo(enabled bool) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
-		o.txLogInfo = true
+		o.txLogInfo = enabled
 	})
 }
