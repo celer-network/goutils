@@ -20,6 +20,10 @@ func (m *Monitor) MonAddr(cfg PerAddrCfg, cbfn EventCallback) {
 	// needed to provide evname to callback func
 	topicEvMap := EventIDMap(cfg.AbiStr)
 
+	if cfg.Topics == nil {
+		cfg.Topics = [][]common.Hash{}
+	}
+
 	q := &ethereum.FilterQuery{
 		Addresses: []common.Address{cfg.Addr},
 		Topics:    cfg.Topics,
