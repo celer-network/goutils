@@ -15,17 +15,20 @@ type txOptions struct {
 	// Transact
 	ethValue *big.Int
 	nonce    uint64
+
+	noNonceRetry bool // If true and nonce>0, do not retry or increment nonce on nonce-related errors
+
 	// Legacy Tx gas price
-	minGasGwei   float64
-	maxGasGwei   float64
-	addGasGwei   float64
-	forceGasGwei *float64 // use pointer to allow forcing zero gas
+	minGasGwei float64
+	maxGasGwei float64
+	addGasGwei float64
 	// EIP-1559 Tx gas price
-	maxFeePerGasGwei         uint64  // aka GasFeeCap in gwei
+	maxFeePerGasGwei         float64 // aka GasFeeCap in gwei
 	maxPriorityFeePerGasGwei float64 // aka GasTipCap in gwei
 	addPriorityFeePerGasGwei float64
-	// For both Legacy and EIP-1559, use suggested * (1 + addGasFeeRatio)
-	addGasFeeRatio float64
+	// For both Legacy and EIP-1559
+	forceGasGwei   *float64 // use pointer to allow forcing zero gas
+	addGasFeeRatio float64  // use suggested * (1 + addGasFeeRatio)
 	// Gas limit
 	gasLimit            uint64
 	addGasEstimateRatio float64
@@ -41,6 +44,9 @@ type txOptions struct {
 	// Pending tx control
 	maxPendingTxNum    uint64 // max number of tx in pending status (already in txpool)
 	maxSubmittingTxNum uint64 // max number of tx being submitted (not in txpool yet)
+
+	// Logging
+	txLogInfo bool // if true, log 'Tx sent' and 'Tx mined' at Info; otherwise Debug
 }
 
 const (
@@ -61,6 +67,7 @@ func defaultTxOptions() txOptions {
 		queryRetryInterval: defaultTxQueryRetryInterval,
 		maxPendingTxNum:    defaultMaxPendingTxNum,
 		maxSubmittingTxNum: defaultMaxSubmittingTxNum,
+		txLogInfo:          false,
 	}
 }
 
@@ -125,7 +132,7 @@ func WithForceGasGwei(g string) TxOption {
 	})
 }
 
-func WithMaxFeePerGasGwei(g uint64) TxOption {
+func WithMaxFeePerGasGwei(g float64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.maxFeePerGasGwei = g
 	})
@@ -214,5 +221,17 @@ func WithMaxPendingTxNum(n uint64) TxOption {
 func WithMaxSubmittingTxNum(n uint64) TxOption {
 	return newFuncTxOption(func(o *txOptions) {
 		o.maxSubmittingTxNum = n
+	})
+}
+
+func WithNoNonceRetry() TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.noNonceRetry = true
+	})
+}
+
+func WithTxLogInfo(enabled bool) TxOption {
+	return newFuncTxOption(func(o *txOptions) {
+		o.txLogInfo = enabled
 	})
 }

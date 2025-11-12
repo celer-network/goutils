@@ -23,10 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-const (
-	parityErrIncrementNonce = "incrementing the nonce"
-)
-
 var (
 	ErrConflictingGasFlags = errors.New("cannot specify both legacy and EIP-1559 gas flags")
 	ErrTooManyPendingTx    = errors.New("too many txs in pending status")
@@ -143,64 +139,42 @@ func (t *Transactor) transact(
 	if err != nil {
 		return nil, fmt.Errorf("determineGas err: %w", err)
 	}
-	// Set nonce
+	// Determine nonce (uses provided nonce if non-zero)
 	nonce, pendingNonce, err := t.determineNonce(txopts)
 	if err != nil {
 		return nil, err
 	}
+
 	for {
-		nonceInt := big.NewInt(0)
-		nonceInt.SetUint64(nonce)
+		nonceInt := new(big.Int).SetUint64(nonce)
 		signer.Nonce = nonceInt
 		tx, err := method(client, signer)
 		if err != nil {
-			errStr := err.Error()
-			if errStr == core.ErrNonceTooLow.Error() ||
-				errStr == txpool.ErrReplaceUnderpriced.Error() ||
-				strings.Contains(errStr, parityErrIncrementNonce) {
-				nonce++
-			} else {
-				return nil, fmt.Errorf("TxMethod err: %w. nonce %s", err, signer.Nonce)
+			if errors.Is(err, core.ErrNonceTooLow) || errors.Is(err, txpool.ErrReplaceUnderpriced) { // retryable nonce errors
+				if !(txopts.noNonceRetry && txopts.nonce != 0) { // retry allowed (either flag not set or nonce not explicitly provided)
+					nonce++
+					log.Debugf("TxMethod nonce err: %s, retrying with nonce %d", err, nonce)
+					continue
+				}
 			}
-		} else {
-			t.sentTx = true
-			logmsg := fmt.Sprintf("Tx sent %x chain %s nonce %d gas %s", tx.Hash(), t.chainId, nonce, printGasGwei(signer))
-			if handler != nil {
-				go func() {
-					log.Debugf("%s, wait to be mined", logmsg)
-					receipt, err := WaitMined(
-						context.Background(), client, tx,
-						WithBlockDelay(txopts.blockDelay),
-						WithPollingInterval(txopts.pollingInterval),
-						WithTimeout(txopts.timeout),
-						WithQueryTimeout(txopts.queryTimeout),
-						WithQueryRetryInterval(txopts.queryRetryInterval))
-					if err != nil {
-						if handler.OnError != nil {
-							handler.OnError(tx, err)
-						}
-						if errors.Is(err, ethereum.NotFound) && pendingNonce > 0 {
-							// reset transactor nonce to pending nonce
-							// this means pending txs after this will probably fail
-							t.lock.Lock()
-							t.nonce = pendingNonce - 1
-							log.Warnf("Reset chain %s transactor nonce to %d", t.chainId, t.nonce)
-							t.lock.Unlock()
-						}
-						return
-					}
-					log.Debugf("Tx mined %x, status %d, chain %s, gas limit %d used %d",
-						tx.Hash(), receipt.Status, t.chainId, tx.Gas(), receipt.GasUsed)
-					if handler.OnMined != nil {
-						handler.OnMined(receipt)
-					}
-				}()
-			} else {
-				log.Debug(logmsg)
-			}
-			t.nonce = nonce
-			return tx, nil
+			return nil, fmt.Errorf("TxMethod err: %w. nonce %s", err, signer.Nonce)
 		}
+		t.sentTx = true
+
+		waitSuffix := ""
+		if handler != nil {
+			// Start async wait first, then log with suffix
+			t.waitTxAsync(client, tx, handler, pendingNonce, txopts)
+			waitSuffix = ", wait to be mined"
+		}
+		txLogf := log.Debugf
+		if txopts.txLogInfo {
+			txLogf = log.Infof
+		}
+		txLogf("Tx sent %x chain %s nonce %d gas %s%s", tx.Hash(), t.chainId, nonce, printGasGwei(signer), waitSuffix)
+
+		t.nonce = nonce
+		return tx, nil
 	}
 }
 
@@ -237,11 +211,53 @@ func (t *Transactor) determineNonce(txopts txOptions) (uint64, uint64, error) {
 	return nonce, pendingNonce, nil
 }
 
+// waitTxAsync waits for the given transaction to be mined and triggers the appropriate callbacks.
+func (t *Transactor) waitTxAsync(
+	client *ethclient.Client,
+	tx *types.Transaction,
+	handler *TransactionStateHandler,
+	pendingNonce uint64,
+	txopts txOptions,
+) {
+	go func() {
+		receipt, err := WaitMined(
+			context.Background(), client, tx,
+			WithBlockDelay(txopts.blockDelay),
+			WithPollingInterval(txopts.pollingInterval),
+			WithTimeout(txopts.timeout),
+			WithQueryTimeout(txopts.queryTimeout),
+			WithQueryRetryInterval(txopts.queryRetryInterval))
+		if err != nil {
+			if handler.OnError != nil {
+				handler.OnError(tx, err)
+			}
+			if errors.Is(err, ethereum.NotFound) && pendingNonce > 0 {
+				// reset transactor nonce to pending nonce
+				// this means pending txs after this will probably fail
+				t.lock.Lock()
+				t.nonce = pendingNonce - 1
+				log.Warnf("Reset chain %s transactor nonce to %d", t.chainId, t.nonce)
+				t.lock.Unlock()
+			}
+			return
+		}
+		txLogf := log.Debugf
+		if txopts.txLogInfo {
+			txLogf = log.Infof
+		}
+		txLogf("Tx mined %x, status %d, chain %s, gas limit %d used %d",
+			tx.Hash(), receipt.Status, t.chainId, tx.Gas(), receipt.GasUsed)
+		if handler.OnMined != nil {
+			handler.OnMined(receipt)
+		}
+	}()
+}
+
 // determineGas sets the gas price and gas limit on the signer
 func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
 	// 1. Determine gas price
 	// Only accept legacy flags or EIP-1559 flags, not both
-	hasLegacyFlags := txopts.forceGasGwei != nil || txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
+	hasLegacyFlags := txopts.minGasGwei > 0 || txopts.maxGasGwei > 0 || txopts.addGasGwei > 0
 	has1559Flags := txopts.maxFeePerGasGwei > 0 || txopts.maxPriorityFeePerGasGwei > 0 || txopts.addPriorityFeePerGasGwei > 0
 	if hasLegacyFlags && has1559Flags {
 		return ErrConflictingGasFlags
@@ -254,7 +270,7 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 		return fmt.Errorf("failed to call HeaderByNumber: %w", err)
 	}
 	if head.BaseFee != nil && !hasLegacyFlags {
-		err = determine1559GasPrice(signer, txopts, client)
+		err = determine1559GasPrice(signer, txopts, client, head.BaseFee)
 		if err != nil {
 			return fmt.Errorf("failed to determine EIP-1559 gas price: %w", err)
 		}
@@ -297,14 +313,25 @@ func (t *Transactor) determineGas(method TxMethod, signer *bind.TransactOpts, tx
 }
 
 // determine1559GasPrice sets the gas price on the signer based on the EIP-1559 fee model
-func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client) error {
-	if txopts.maxFeePerGasGwei > 0 {
-		signer.GasFeeCap = new(big.Int).SetUint64(txopts.maxFeePerGasGwei * 1e9)
+func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *ethclient.Client, baseFee *big.Int) error {
+	// If forceGasGwei is set, map it to 1559 caps; it overrides other 1559 flags
+	if txopts.forceGasGwei != nil {
+		forceWei := new(big.Int).SetUint64(uint64(*txopts.forceGasGwei * 1e9))
+		signer.GasFeeCap = new(big.Int).Set(forceWei)
+		tip := new(big.Int).Sub(forceWei, baseFee) // baseFee is guaranteed to be non-nil here
+		if tip.Sign() < 0 {
+			tip = big.NewInt(0)
+		}
+		signer.GasTipCap = tip
+		return nil
 	}
+
 	if txopts.maxPriorityFeePerGasGwei > 0 {
 		signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.maxPriorityFeePerGasGwei * 1e9))
-	} else if txopts.addPriorityFeePerGasGwei > 0 || txopts.addGasFeeRatio > 0 {
-		suggestedGasTipCap, err := client.SuggestGasTipCap(context.Background())
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+		defer cancel()
+		suggestedGasTipCap, err := client.SuggestGasTipCap(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to call SuggestGasTipCap: %w", err)
 		}
@@ -312,8 +339,20 @@ func determine1559GasPrice(signer *bind.TransactOpts, txopts txOptions, client *
 			signer.GasTipCap = new(big.Int).SetUint64(uint64(txopts.addPriorityFeePerGasGwei*1e9) + suggestedGasTipCap.Uint64())
 		} else if txopts.addGasFeeRatio > 0 {
 			signer.GasTipCap = new(big.Int).SetUint64(uint64(float64(suggestedGasTipCap.Uint64()) * (1 + txopts.addGasFeeRatio)))
+		} else {
+			signer.GasTipCap = suggestedGasTipCap
 		}
 	}
+
+	if txopts.maxFeePerGasGwei > 0 {
+		signer.GasFeeCap = new(big.Int).SetUint64(uint64(txopts.maxFeePerGasGwei * 1e9))
+	} else {
+		// feecap = 2*baseFee + tip (handles typical basefee increases per EIP-1559 guidance)
+		feecap := new(big.Int).Mul(baseFee, big.NewInt(2))
+		feecap.Add(feecap, signer.GasTipCap)
+		signer.GasFeeCap = feecap
+	}
+
 	return nil
 }
 
@@ -324,7 +363,9 @@ func determineLegacyGasPrice(
 		signer.GasPrice = new(big.Int).SetUint64(uint64(*txopts.forceGasGwei * 1e9))
 		return nil
 	}
-	gasPrice, err := client.SuggestGasPrice(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+	defer cancel()
+	gasPrice, err := client.SuggestGasPrice(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to call SuggestGasPrice: %w", err)
 	}
@@ -436,5 +477,70 @@ func newTxWaitMinedHandler(
 			log.Errorf("%s transaction %x err: %s", description, tx.Hash(), err)
 			errChan <- err
 		},
+	}
+}
+
+func SimpleTransferTx(to common.Address) TxMethod {
+	return func(backend bind.ContractTransactor, opts *bind.TransactOpts) (*types.Transaction, error) {
+		// Determine gas: default 21,000; when dry-run and unset, estimate for accuracy
+		gas := opts.GasLimit
+		if gas == 0 {
+			if opts.NoSend {
+				if ec, ok := backend.(*ethclient.Client); ok {
+					ctx, cancel := context.WithTimeout(context.Background(), ctxTimeout)
+					defer cancel()
+					// Estimate without calldata for a plain value transfer
+					est, err := ec.EstimateGas(ctx, ethereum.CallMsg{
+						From:  opts.From,
+						To:    &to,
+						Value: opts.Value,
+					})
+					if err == nil && est > 0 {
+						gas = est
+					}
+				}
+			}
+			if gas == 0 {
+				gas = 21000
+			}
+		}
+
+		// Build the transaction (no calldata)
+		var tx *types.Transaction
+		if opts.GasFeeCap != nil && opts.GasFeeCap.Sign() > 0 {
+			// EIP-1559
+			tx = types.NewTx(&types.DynamicFeeTx{
+				Nonce:     opts.Nonce.Uint64(),
+				To:        &to,
+				Value:     opts.Value,
+				Gas:       gas,
+				GasTipCap: opts.GasTipCap,
+				GasFeeCap: opts.GasFeeCap,
+			})
+		} else {
+			// Legacy
+			tx = types.NewTx(&types.LegacyTx{
+				Nonce:    opts.Nonce.Uint64(),
+				To:       &to,
+				Value:    opts.Value,
+				Gas:      gas,
+				GasPrice: opts.GasPrice,
+			})
+		}
+
+		// Respect NoSend for determineGas dry-run: no need to sign
+		if opts.NoSend {
+			return tx, nil
+		}
+
+		// Sign and send
+		signed, err := opts.Signer(opts.From, tx)
+		if err != nil {
+			return nil, err
+		}
+		if err := backend.SendTransaction(context.Background(), signed); err != nil {
+			return nil, err
+		}
+		return signed, nil
 	}
 }

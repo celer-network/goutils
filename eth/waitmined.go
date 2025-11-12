@@ -145,11 +145,12 @@ func waitTxConfirmed(
 		header, err = blockHeader(ctx, ec, opts.queryTimeout, opts.queryRetryInterval)
 		if err == nil && confirmBlk.Cmp(header.Number) < 0 {
 			receipt, err = transactionReceipt(ctx, ec, txHash, opts.queryTimeout, opts.queryRetryInterval)
-			if err == nil {
+			switch err {
+			case nil:
 				return receipt, nil
-			} else if err == ethereum.NotFound || err == ErrMissingField {
+			case ethereum.NotFound, ErrMissingField:
 				return nil, fmt.Errorf("tx %x err: %w", txHash, ErrTxReorg)
-			} else {
+			default:
 				return receipt, fmt.Errorf("tx %x confirm receipt err: %w", txHash, err)
 			}
 		}
