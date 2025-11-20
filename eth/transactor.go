@@ -150,7 +150,8 @@ func (t *Transactor) transact(
 		signer.Nonce = nonceInt
 		tx, err := method(client, signer)
 		if err != nil {
-			if errors.Is(err, core.ErrNonceTooLow) || errors.Is(err, txpool.ErrReplaceUnderpriced) { // retryable nonce errors
+			errStr := err.Error()
+			if strings.Contains(errStr, core.ErrNonceTooLow.Error()) || strings.Contains(errStr, txpool.ErrReplaceUnderpriced.Error()) { // retryable nonce errors
 				if !(txopts.noNonceRetry && txopts.nonce != 0) { // retry allowed (either flag not set or nonce not explicitly provided)
 					nonce++
 					log.Debugf("TxMethod nonce err: %s, retrying with nonce %d", err, nonce)
@@ -231,7 +232,7 @@ func (t *Transactor) waitTxAsync(
 			if handler.OnError != nil {
 				handler.OnError(tx, err)
 			}
-			if errors.Is(err, ethereum.NotFound) && pendingNonce > 0 {
+			if strings.Contains(err.Error(), ethereum.NotFound.Error()) && pendingNonce > 0 {
 				// reset transactor nonce to pending nonce
 				// this means pending txs after this will probably fail
 				t.lock.Lock()
