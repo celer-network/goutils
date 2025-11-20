@@ -1,8 +1,6 @@
 module github.com/celer-network/goutils
 
-go 1.23.0
-
-toolchain go1.23.10
+go 1.24.0
 
 require (
 	github.com/aws/aws-sdk-go v1.41.15
@@ -52,7 +50,7 @@ require (
 	github.com/supranational/blst v0.3.14 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
-	golang.org/x/crypto v0.35.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
 )
