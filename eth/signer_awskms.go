@@ -37,12 +37,17 @@ type KmsSigner struct {
 
 // region and keyAlias must be valid, eg. us-west-1 alias/mytestkey
 // if awsKey, awsSec are empty string, will use aws sdk auto search
-func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*KmsSigner, error) {
+func NewKmsSigner(region, keyAlias, awsKey, awsSec, profile string, chainId *big.Int) (*KmsSigner, error) {
 	cfg := &aws.Config{
 		Region: aws.String(region),
 	}
-	if awsKey != "" && awsSec != "" {
+
+	if profile != "" {
+		cfg.Credentials = credentials.NewSharedCredentials("", profile)
+	} else if awsKey != "" && awsSec != "" {
 		cfg.Credentials = credentials.NewStaticCredentials(awsKey, awsSec, "")
+	} else {
+		// default use role
 	}
 	sess, err := session.NewSession(cfg)
 	if err != nil {
