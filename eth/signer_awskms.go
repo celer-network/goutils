@@ -5,6 +5,7 @@ import (
 	"encoding/asn1"
 	"encoding/hex"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"math/big"
 	"os"
 	"strings"
@@ -47,12 +48,14 @@ func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*K
 	} else if awsKey != "" && awsSec != "" {
 		cfg.Credentials = credentials.NewStaticCredentials(awsKey, awsSec, "")
 	} else {
-		// try EC2 role first, fallback to env vars, then .aws/credentials file
+		sess := session.Must(session.NewSession())
+		// 2. 创建 EC2 元数据客户端
+		ec2m := ec2metadata.New(sess)
 		cfg.Credentials = credentials.NewChainCredentials(
 			[]credentials.Provider{
-				&ec2rolecreds.EC2RoleProvider{},
-				&credentials.EnvProvider{},
-				&credentials.SharedCredentialsProvider{},
+				&ec2rolecreds.EC2RoleProvider{
+					Client: ec2m,
+				},
 			},
 		)
 	}
