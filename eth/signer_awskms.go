@@ -47,8 +47,14 @@ func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*K
 	} else if awsKey != "" && awsSec != "" {
 		cfg.Credentials = credentials.NewStaticCredentials(awsKey, awsSec, "")
 	} else {
-		// use EC2 role only (not .aws/credentials file)
-		cfg.Credentials = credentials.NewCredentials(&ec2rolecreds.EC2RoleProvider{})
+		// try EC2 role first, fallback to env vars, then .aws/credentials file
+		cfg.Credentials = credentials.NewChainCredentials(
+			[]credentials.Provider{
+				&ec2rolecreds.EC2RoleProvider{},
+				&credentials.EnvProvider{},
+				&credentials.SharedCredentialsProvider{},
+			},
+		)
 	}
 	sess, err := session.NewSession(cfg)
 	if err != nil {
