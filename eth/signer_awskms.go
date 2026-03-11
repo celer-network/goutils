@@ -203,7 +203,7 @@ func CreateSigner(ksfile, passphrase string, chainid *big.Int) (Signer, common.A
 				return nil, common.Address{}, fmt.Errorf("%s has wrong format, expected '<awsKey>:<awsSecret>'", passphrase)
 			}
 		}
-		kmsSigner, err := NewKmsSigner(kmskeyinfo[1], kmskeyinfo[2], awskeysec[0], awskeysec[1], chainid)
+		kmsSigner, err := NewKmsSigner(kmskeyinfo[1], kmskeyinfo[2], awskeysec[0], awskeysec[1], "", chainid)
 		if err != nil {
 			return nil, common.Address{}, err
 		}
