@@ -37,13 +37,13 @@ type KmsSigner struct {
 
 // region and keyAlias must be valid, eg. us-west-1 alias/mytestkey
 // if awsKey, awsSec are empty string, will use aws sdk auto search
-func NewKmsSigner(region, keyAlias, awsKey, awsSec, profile string, chainId *big.Int) (*KmsSigner, error) {
+func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*KmsSigner, error) {
 	cfg := &aws.Config{
 		Region: aws.String(region),
 	}
 
-	if profile != "" {
-		cfg.Credentials = credentials.NewSharedCredentials("", profile)
+	if awsKey == "profile" {
+		cfg.Credentials = credentials.NewSharedCredentials("", awsSec)
 	} else if awsKey != "" && awsSec != "" {
 		cfg.Credentials = credentials.NewStaticCredentials(awsKey, awsSec, "")
 	} else {
@@ -188,8 +188,10 @@ func padBigInt(i *big.Int) []byte {
 // passphrase will be awsKey:awsSec or if empty, will use aws auto search env variable etc
 // otherwise normal ks json file based signer
 const awskmsPre = "awskms:"
+const awsCreProfilePre = "profile"
 
 // return signer, address
+// if use profile, passphrase should be "profile:default" or "profile:xxx"
 func CreateSigner(ksfile, passphrase string, chainid *big.Int) (Signer, common.Address, error) {
 	if strings.HasPrefix(ksfile, awskmsPre) {
 		kmskeyinfo := strings.SplitN(ksfile, ":", 3)
@@ -203,7 +205,8 @@ func CreateSigner(ksfile, passphrase string, chainid *big.Int) (Signer, common.A
 				return nil, common.Address{}, fmt.Errorf("%s has wrong format, expected '<awsKey>:<awsSecret>'", passphrase)
 			}
 		}
-		kmsSigner, err := NewKmsSigner(kmskeyinfo[1], kmskeyinfo[2], awskeysec[0], awskeysec[1], "", chainid)
+
+		kmsSigner, err := NewKmsSigner(kmskeyinfo[1], kmskeyinfo[2], awskeysec[0], awskeysec[1], chainid)
 		if err != nil {
 			return nil, common.Address{}, err
 		}
