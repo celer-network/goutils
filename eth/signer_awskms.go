@@ -11,6 +11,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -46,7 +47,8 @@ func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*K
 	} else if awsKey != "" && awsSec != "" {
 		cfg.Credentials = credentials.NewStaticCredentials(awsKey, awsSec, "")
 	} else {
-		// default use aws role
+		// use EC2 role only (not .aws/credentials file)
+		cfg.Credentials = credentials.NewCredentials(&ec2rolecreds.EC2RoleProvider{})
 	}
 	sess, err := session.NewSession(cfg)
 	if err != nil {
