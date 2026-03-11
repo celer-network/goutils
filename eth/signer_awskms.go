@@ -5,14 +5,14 @@ import (
 	"encoding/asn1"
 	"encoding/hex"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"math/big"
 	"os"
 	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/kms"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -45,10 +45,11 @@ func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*K
 	}
 	if awsKey == "profile" {
 		cfg.Credentials = credentials.NewSharedCredentials("", awsSec)
+	} else if awsKey == "iam" {
+		// force use iam role, ignore cre or env
+		cfg.Credentials = ec2rolecreds.NewCredentialsWithClient(ec2metadata.New(session.Must(session.NewSession())))
 	} else if awsKey != "" && awsSec != "" {
 		cfg.Credentials = credentials.NewStaticCredentials(awsKey, awsSec, "")
-	} else {
-		cfg.Credentials = ec2rolecreds.NewCredentialsWithClient(ec2metadata.New(session.Must(session.NewSession())))
 	}
 	sess, err := session.NewSession(cfg)
 	if err != nil {
