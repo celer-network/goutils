@@ -48,16 +48,7 @@ func NewKmsSigner(region, keyAlias, awsKey, awsSec string, chainId *big.Int) (*K
 	} else if awsKey != "" && awsSec != "" {
 		cfg.Credentials = credentials.NewStaticCredentials(awsKey, awsSec, "")
 	} else {
-		sess := session.Must(session.NewSession())
-		// 2. 创建 EC2 元数据客户端
-		ec2m := ec2metadata.New(sess)
-		cfg.Credentials = credentials.NewChainCredentials(
-			[]credentials.Provider{
-				&ec2rolecreds.EC2RoleProvider{
-					Client: ec2m,
-				},
-			},
-		)
+		cfg.Credentials = ec2rolecreds.NewCredentialsWithClient(ec2metadata.New(session.Must(session.NewSession())))
 	}
 	sess, err := session.NewSession(cfg)
 	if err != nil {
