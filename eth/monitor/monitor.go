@@ -300,13 +300,15 @@ func (s *Service) monitorEvent(e Event, id CallbackID) {
 		var eventLog types.Log
 		var err error
 
-		if recreate {
-			err = fmt.Errorf("app callback wants watcher recreated")
-		} else {
+		if !recreate {
 			eventLog, err = e.watch.Next()
 		}
-		if err != nil {
-			log.Errorln("monitoring event error:", e.Name, err)
+		if err != nil || recreate {
+			if recreate {
+				log.Debugln("recreating event watch per callback:", e.Name)
+			} else {
+				log.Errorln("monitoring event error:", e.Name, err)
+			}
 			e.watch.Close()
 
 			var w *watcher.Watch
